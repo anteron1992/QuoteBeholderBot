@@ -7,3 +7,4 @@ async.py
 tutorial.py
 tinvest/__pycache__
 tinvest/auth.py
+quotenv/
