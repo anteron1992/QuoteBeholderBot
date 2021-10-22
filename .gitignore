@@ -1,0 +1,9 @@
+__pycache__/
+auth.py
+send_message.py
+tickers.db
+tickers.db_backup
+async.py
+tutorial.py
+tinvest/__pycache__
+tinvest/auth.py
