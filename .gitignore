@@ -1,5 +1,5 @@
 __pycache__/
-auth.py
+auth.env
 send_message.py
 tickers.db
 tickers.db_backup

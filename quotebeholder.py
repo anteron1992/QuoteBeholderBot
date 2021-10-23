@@ -7,13 +7,14 @@ from telegram.ext import (
 )
 from telegram.ext.dispatcher import run_async
 from telegram import InlineQueryResultArticle, InputTextMessageContent, ParseMode, Bot
-from openapi_client import openapi
-from auth import TELE_TOKEN, SAND_TOKEN
+from tinvest import tinvestor
 from time import sleep
 from tabulate import tabulate
 from os import path
 from math import fabs
-from openapi_genclient import exceptions
+from dotenv import load_dotenv
+from os import getenv
+from logging.handlers import RotatingFileHandler
 import html
 import json
 import traceback
@@ -25,32 +26,36 @@ import logging
 
 INTERVAL = 3600
 PERCENT = 2.0
-logging.basicConfig(
-    filename="/var/log/quotebeholder.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+
+
+formatter = logging.Formatter("{asctime} - {name} - {levelname} - {message}", style="{")
+# Пишется лог со всех модулей с severity DEBUG и выше в quotebeholder_debug.log
+debuging = logging.getLogger()
+debuging.setLevel(logging.DEBUG)
+all_log = RotatingFileHandler("/var/log/quotebeholder/quotebeholder_debug.log", maxBytes=1000000, backupCount=10)
+all_log.setLevel(logging.DEBUG)
+all_log.setFormatter(formatter)
+debuging.addHandler(all_log)
+# Логи самого приложения пишутся в quotebeholder.log
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+logfile = logging.FileHandler("/var/log/quotebeholder/quotebeholder.log")
+logfile.setLevel(logging.INFO)
+logfile.setFormatter(formatter)
+log.addHandler(logfile)
+
+load_dotenv('auth.env')
 create_db.conndb()
-client = openapi.api_client(SAND_TOKEN)
-updater = Updater(token=TELE_TOKEN)
+client = tinvestor.Tinvest(getenv('SAND_TOKEN'))
+updater = Updater(token=getenv('TELE_TOKEN'))
 dispatcher = updater.dispatcher
-sender = Bot(token=TELE_TOKEN)
-pf = client.portfolio.portfolio_get().to_dict()
-URL = f"https://api.telegram.org/bot{TELE_TOKEN}/sendMessage"
-TRIES = 5
+# Отдельный экземпляр для отправки сообщений из async функции
+sender = Bot(token=getenv('TELE_TOKEN')) 
+pf = client.get_portfolio(account_id=getenv('TIN_ACCOUNT_ID'))
+URL = f"https://api.telegram.org/bot{getenv('TELE_TOKEN')}/sendMessage"
 
 def search_ticker(ticker):
-    try:
-        return client.market.market_search_by_ticker_get(ticker)
-    except exceptions.ApiException as expt:
-        if TRIES == 0:
-            logging.CRITICAL("Не удалось соединиться :(")
-            raise ConnectionError
-        logging.ERROR(expt)
-        logging.WARNING("Пытаюсь установить соединение снова. Попытка {TRIES}...")
-        TRIES -= 1
-        sleep(5)
-        search_ticker(ticker)
+    return client.get_market_by_ticker(ticker)
 
 
 def check_ticker_in_db(ticker, user):
@@ -71,20 +76,21 @@ def add_new_user_to_db(user):
         with connect:
             query = "INSERT INTO usernames VALUES (?, ?, datetime('now'))"
             connect.execute(query, row)
+            log.info(f"New user {user.effective_user.name} ({user.effective_user.id}) added to db")
     except sqlite3.IntegrityError:
         pass
 
 
 def subscribe_on_new_ticker(ticker, user):
-    tk = search_ticker(ticker).to_dict()
+    tk = search_ticker(ticker)
     connect = sqlite3.connect(create_db.DB_NAME)
     if tk["payload"]["instruments"]:
         if not check_ticker_in_db(ticker, user):
             ticker = tk["payload"]["instruments"][0]["ticker"]
             name = tk["payload"]["instruments"][0]["name"]
-            price = client.market.market_orderbook_get(
-                tk["payload"]["instruments"][0]["figi"], 3
-            ).to_dict()["payload"]["last_price"]
+            price = client.get_market_orderbook(
+                figi = tk["payload"]["instruments"][0]["figi"], depth = 3
+            )["payload"]["lastPrice"]
             row = (
                 user.effective_user.id,
                 user.effective_user.name,
@@ -96,11 +102,9 @@ def subscribe_on_new_ticker(ticker, user):
                 with connect:
                     query = "INSERT INTO tickers VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))"
                     connect.execute(query, row)
+                    log.info(f"{user.effective_user.name} ({user.effective_user.id}) subscribed on new ticker {ticker}")
             except sqlite3.IntegrityError:
                 pass
-    # Если будет всё ок, выпилить это недоразумение
-    #    else:
-    #        sender.sendMessage(chat_id=user.effective_chat.id, parse_mode=ParseMode.HTML, text="Тикер {ticker} уже добавлен")
     else:
         raise ValueError(f"Тикер {ticker} не найден")
 
@@ -112,6 +116,7 @@ def del_subscribe_on_new_ticker(ticker, user):
         with connect:
             query = "DELETE FROM tickers WHERE id=? AND ticker=?;"
             connect.execute(query, row)
+            log.info(f"{user.effective_user.name} ({user.effective_user.id}) unsubscribed from ticker {ticker.upper()}")
     except sqlite3.IntegrityError:
         pass
 
@@ -119,11 +124,13 @@ def del_subscribe_on_new_ticker(ticker, user):
 def subscribe_portfolio(pf, user):
     for pos in pf["payload"]["positions"]:
         subscribe_on_new_ticker(pos["ticker"], user)
+        log.info(f"{user.effective_user.name} ({user.effective_user.id}) subscribed own portfolio")
 
 
 def del_subscribe_portfolio(pf, user):
     for pos in pf["payload"]["positions"]:
         del_subscribe_on_new_ticker(pos["ticker"], user)
+        log.info(f"{user.effective_user.name} ({user.effective_user.id}) unsubscribed own portfolio")
 
 
 def show_list_of_subscribes(user):
@@ -131,7 +138,8 @@ def show_list_of_subscribes(user):
     connect = sqlite3.connect(create_db.DB_NAME)
     try:
         with connect:
-            query = f"SELECT ticker, name FROM tickers WHERE id=?;"
+            query = f"SELECT ticker, name FROM tickers WHERE id=?;" 
+            log.info(f"{user.effective_user.name} ({user.effective_user.id}) invoking list of subscribers")
             return connect.execute(query, row).fetchall()
     except sqlite3.IntegrityError:
         pass
@@ -169,17 +177,18 @@ def normalize_float(value):
 
 
 def show_ticker_info(ticker, user):
-    tk = search_ticker(ticker).to_dict()
+    tk = search_ticker(ticker)
     row = (user.effective_user.id, ticker.upper())
     connect = sqlite3.connect(create_db.DB_NAME)
     if tk["payload"]["instruments"]:
-        price = client.market.market_orderbook_get(
-            tk["payload"]["instruments"][0]["figi"], 3
-        ).to_dict()["payload"]["last_price"]
+        price = client.get_market_orderbook(
+            figi = tk["payload"]["instruments"][0]["figi"], depth=3
+        )["payload"]["lastPrice"]
         query = "SELECT * FROM tickers WHERE id=? AND ticker=?;"
         try:
             with connect:
                 result = connect.execute(query, row).fetchall()[0]
+                log.info(f"{user.effective_user.name} ({user.effective_user.id}) invoking ticker {result[2]} info def")
                 return {
                     "ticker": result[2],
                     "name": result[3],
@@ -204,12 +213,13 @@ def show_ticker_info(ticker, user):
 
 def show_ticker_info_by_id(ticker, id):
     row = (id, ticker.upper())
-    tk = search_ticker(ticker).to_dict()
+    tk = search_ticker(ticker)
     connect = sqlite3.connect(create_db.DB_NAME)
     if tk["payload"]["instruments"]:
-        price = client.market.market_orderbook_get(
-            tk["payload"]["instruments"][0]["figi"], 3
-        ).to_dict()["payload"]["last_price"]
+        
+        price = client.get_market_orderbook(
+            figi = tk["payload"]["instruments"][0]["figi"], depth = 3
+        )["payload"]["lastPrice"]
         query = "SELECT * FROM tickers WHERE id=? AND ticker=?;"
         try:
             with connect:
@@ -451,8 +461,8 @@ async def interval_polling():
                     sender.sendMessage(
                         chat_id=id, parse_mode=ParseMode.HTML, text=message
                     )
-                    logging.info(
-                        f"Цена на тикер {rez['ticker']} изменилась на {rez['diff']}% cообщение отправлено на {id} сообщение: \n{message}"
+                    log.info(
+                        f"Ticker {rez['ticker']} price is changed by {rez['diff']}% message sent to {id}"
                     )
                     override_price(id, rez)
         await asyncio.sleep(INTERVAL)
@@ -465,7 +475,7 @@ def unknown(update, context):
     )
 
 def error_handler(update, context):
-    logging.ERROR("Возникла ошибка {context.error}")
+    log.ERROR("Возникла ошибка {context.error}")
     tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
     tb_string = ''.join(tb_list)
     update_str = update.to_dict() if isinstance(update, Update) else str(update)
@@ -511,4 +521,4 @@ if __name__ == "__main__":
     try:
         asyncio.new_event_loop().run_until_complete(interval_polling())
     except Exception as e:
-        logging.exception("Exception: %r", e)
+        log.exception("Exception: %r", e)
