@@ -14,7 +14,9 @@ from os import path
 from math import fabs
 from dotenv import load_dotenv
 from os import getenv
+from bs4 import BeautifulSoup
 from logging.handlers import RotatingFileHandler
+import re
 import html
 import json
 import traceback
@@ -24,7 +26,8 @@ import sqlite3
 import create_db
 import logging
 
-INTERVAL = 3600
+POLLING_INTERVAL = 3600
+NEWS_INTERVAL = 1800
 PERCENT = 2.0
 
 
@@ -258,6 +261,54 @@ def override_price(id, ticker_info):
     except sqlite3.IntegrityError:
         pass
 
+def get_username_tickers():
+    polling_list = dict()
+    users_table = show_usernames_from_db()
+    for line in users_table:
+        polling_list.update({line[0]: show_list_of_subscribes_by_id(line[0])})
+    return polling_list
+
+def get_time_of_last_news(ticker):
+    row = (ticker[0],)
+    connect = sqlite3.connect(create_db.DB_NAME)
+    try:
+        with connect:
+            query = f"SELECT time FROM news WHERE ticker=?"
+            return connect.execute(query, row).fetchall()
+    except sqlite3.IntegrityError:
+        pass
+
+def update_news_info(ticker, news):
+    row_create = (ticker[0], news['header'], news['time'])
+    row_update = (news['header'], news['time'], ticker[0])
+    connect = sqlite3.connect(create_db.DB_NAME)
+    print (get_time_of_last_news(ticker)[0][0])
+    try:
+        with connect:
+            if not get_time_of_last_news(ticker)[0][0]:
+                query = "INSERT INTO news VALUES (?, ?, ?, datetime('now'));"
+                connect.execute(query, row_create)
+            else:
+                query = "UPDATE news SET header=?, time=?, updated=datetime('now') WHERE ticker=?;"
+                connect.execute(query, row_update)
+    except sqlite3.IntegrityError:
+        pass
+
+
+def get_news_by_ticker (ticker):
+    rezult = requests.get(f"https://bcs-express.ru/category?tag={ticker[0].lower()}")
+    base = "https://bcs-express.ru"
+    soup = BeautifulSoup(rezult.text, "lxml")
+    try:
+        page = soup.find("div", attrs={"class" : "feed-item"})
+        header = page.find("div", attrs={"class": "feed-item__title"}).text
+    except AttributeError as err:
+        log.error(f"Ticker {ticker[0]} not found: {err}")
+        return None
+    time = page.find("div", attrs={"class": "feed-item__date"}).text
+    href = base + re.findall('.*href="(\S+)".*', str(page))[0]
+    text = page.find("div", attrs={"class": "feed-item__summary"}).text
+    return {"time" : time, "header" : header, "text" : text, "href" : href}
 
 #######################################TELEGRAM FUNCTIONS##########################################################
 
@@ -443,13 +494,9 @@ def show_ticker(update, context):
 
 async def interval_polling():
     flag = True
-    polling_list = dict()
-    users_table = show_usernames_from_db()
-    while True:
-        for line in users_table:
-            polling_list.update({line[0]: show_list_of_subscribes_by_id(line[0])})
-        for id in polling_list:
-            for ticker in polling_list[id]:
+    while True:    
+        for id in get_username_tickers():
+            for ticker in get_username_tickers()[id]:
                 rez = show_ticker_info_by_id(ticker[0], id)
                 if fabs(rez["diff"]) >= PERCENT:
                     flag = False
@@ -465,17 +512,44 @@ async def interval_polling():
                         f"Ticker {rez['ticker']} price is changed by {rez['diff']}% message sent to {id}"
                     )
                     override_price(id, rez)
-        await asyncio.sleep(INTERVAL)
+        await asyncio.sleep(POLLING_INTERVAL)
 
+async def interval_news():
+    while True:    
+        for id in get_username_tickers():
+            for ticker in get_username_tickers()[id]:
+                rez = get_news_by_ticker (ticker)
+                if rez and get_time_of_last_news(ticker)[0][0] != rez['time']:
+                    message = (f"{ticker[0]}<em>{rez['time']}</em>\n"
+                               f"<b>{rez['header']}</b>\n"
+                               f"{rez['text']}\n"
+                               f"{rez['href']}")
+                    sender.sendMessage(
+                        chat_id=id, parse_mode=ParseMode.HTML, text=message
+                        )
+                    log.info(
+                        f"Ticker {ticker[0]} fresh news from {rez['time']} message sent to {id}"
+                    )
+                    update_news_info(ticker, rez)
+                await asyncio.sleep(5)
+        await asyncio.sleep(NEWS_INTERVAL)
 
 def unknown(update, context):
+    log.info(f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}")
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="Такой команды нет, выбери нужную команду из списка.",
     )
 
+def unknown_text(update, context):
+    log.info(f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}")
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Допускаются только команды /.",
+    )
+
 def error_handler(update, context):
-    log.ERROR("Возникла ошибка {context.error}")
+    log.error(f"Возникла ошибка {context.error}")
     tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
     tb_string = ''.join(tb_list)
     update_str = update.to_dict() if isinstance(update, Update) else str(update)
@@ -509,16 +583,26 @@ dispatcher.add_handler(show_subscribe_handler)
 show_ticker_handler = CommandHandler("show_ticker", show_ticker)
 dispatcher.add_handler(show_ticker_handler)
 
-unknown_handler = MessageHandler(
+unknown_command_handler = MessageHandler(
     Filters.command, unknown
 )  # Если приходит команда, которую не знаем - пускаем функцию unknown
-dispatcher.add_handler(unknown_handler)
+dispatcher.add_handler(unknown_command_handler)
+
+unknown_text_handler = MessageHandler(Filters.text, unknown_text) # Отвечаем на любые не команды
+dispatcher.add_handler(unknown_text_handler)
+
 # Обработчик ошибок
 dispatcher.add_error_handler(error_handler)
+
+async def main():
+    await asyncio.gather(
+        interval_polling(),
+        interval_news()
+    )
 
 if __name__ == "__main__":
     updater.start_polling()
     try:
-        asyncio.new_event_loop().run_until_complete(interval_polling())
+        asyncio.new_event_loop().run_until_complete(main())
     except Exception as e:
         log.exception("Exception: %r", e)

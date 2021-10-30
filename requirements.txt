@@ -7,3 +7,7 @@ pyserial==3.4
 python-telegram-bot==13.5
 tabulate==0.8.9
 tinvest==3.0.3
+lxml==4.6.3
+beautifulsoup4==4.10.0
+bs4==0.0.1
+soupsieve==2.2.1

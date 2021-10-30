@@ -15,3 +15,10 @@ create table tickers (
 	    created      text,
 	    updated	 text
 );
+
+create table news (
+	ticker		text primary key,
+	header		text,
+	time		text,
+	updated		text
+);
