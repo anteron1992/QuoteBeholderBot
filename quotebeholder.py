@@ -1,30 +1,31 @@
-from telegram.ext import (
-    Updater,
-    CommandHandler,
-    MessageHandler,
-    Filters,
-    InlineQueryHandler,
-)
-from telegram.ext.dispatcher import run_async
-from telegram import InlineQueryResultArticle, InputTextMessageContent, ParseMode, Bot
-from tinvest import tinvestor
-from time import sleep
-from tabulate import tabulate
-from os import path
-from math import fabs
-from dotenv import load_dotenv
-from os import getenv
-from bs4 import BeautifulSoup
-from logging.handlers import RotatingFileHandler
-import re
+import asyncio
 import html
 import json
-import traceback
-import requests
-import asyncio
-import sqlite3
-import create_db
 import logging
+import re
+import sqlite3
+import traceback
+from logging.handlers import RotatingFileHandler
+from math import fabs
+from os import getenv, path
+from time import sleep
+
+import requests
+from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from tabulate import tabulate
+from telegram import Bot, InlineQueryResultArticle, InputTextMessageContent, ParseMode
+from telegram.ext import (
+    CommandHandler,
+    Filters,
+    InlineQueryHandler,
+    MessageHandler,
+    Updater,
+)
+from telegram.ext.dispatcher import run_async
+
+import create_db
+from tinvest import tinvestor
 
 POLLING_INTERVAL = 3600
 NEWS_INTERVAL = 1800
@@ -35,7 +36,9 @@ formatter = logging.Formatter("{asctime} - {name} - {levelname} - {message}", st
 # Пишется лог со всех модулей с severity DEBUG и выше в quotebeholder_debug.log
 debuging = logging.getLogger()
 debuging.setLevel(logging.DEBUG)
-all_log = RotatingFileHandler("/var/log/quotebeholder/quotebeholder_debug.log", maxBytes=1000000, backupCount=10)
+all_log = RotatingFileHandler(
+    "/var/log/quotebeholder/quotebeholder_debug.log", maxBytes=1000000, backupCount=10
+)
 all_log.setLevel(logging.DEBUG)
 all_log.setFormatter(formatter)
 debuging.addHandler(all_log)
@@ -47,15 +50,16 @@ logfile.setLevel(logging.INFO)
 logfile.setFormatter(formatter)
 log.addHandler(logfile)
 
-load_dotenv('auth.env')
+load_dotenv("auth.env")
 create_db.conndb()
-client = tinvestor.Tinvest(getenv('SAND_TOKEN'))
-updater = Updater(token=getenv('TELE_TOKEN'))
+client = tinvestor.Tinvest(getenv("SAND_TOKEN"))
+updater = Updater(token=getenv("TELE_TOKEN"))
 dispatcher = updater.dispatcher
 # Отдельный экземпляр для отправки сообщений из async функции
-sender = Bot(token=getenv('TELE_TOKEN')) 
-pf = client.get_portfolio(account_id=getenv('TIN_ACCOUNT_ID'))
+sender = Bot(token=getenv("TELE_TOKEN"))
+pf = client.get_portfolio(account_id=getenv("TIN_ACCOUNT_ID"))
 URL = f"https://api.telegram.org/bot{getenv('TELE_TOKEN')}/sendMessage"
+
 
 def search_ticker(ticker):
     return client.get_market_by_ticker(ticker)
@@ -79,7 +83,9 @@ def add_new_user_to_db(user):
         with connect:
             query = "INSERT INTO usernames VALUES (?, ?, datetime('now'))"
             connect.execute(query, row)
-            log.info(f"New user {user.effective_user.name} ({user.effective_user.id}) added to db")
+            log.info(
+                f"New user {user.effective_user.name} ({user.effective_user.id}) added to db"
+            )
     except sqlite3.IntegrityError:
         pass
 
@@ -92,7 +98,7 @@ def subscribe_on_new_ticker(ticker, user):
             ticker = tk["payload"]["instruments"][0]["ticker"]
             name = tk["payload"]["instruments"][0]["name"]
             price = client.get_market_orderbook(
-                figi = tk["payload"]["instruments"][0]["figi"], depth = 3
+                figi=tk["payload"]["instruments"][0]["figi"], depth=3
             )["payload"]["lastPrice"]
             row = (
                 user.effective_user.id,
@@ -105,7 +111,9 @@ def subscribe_on_new_ticker(ticker, user):
                 with connect:
                     query = "INSERT INTO tickers VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))"
                     connect.execute(query, row)
-                    log.info(f"{user.effective_user.name} ({user.effective_user.id}) subscribed on new ticker {ticker}")
+                    log.info(
+                        f"{user.effective_user.name} ({user.effective_user.id}) subscribed on new ticker {ticker}"
+                    )
             except sqlite3.IntegrityError:
                 pass
     else:
@@ -119,7 +127,9 @@ def del_subscribe_on_new_ticker(ticker, user):
         with connect:
             query = "DELETE FROM tickers WHERE id=? AND ticker=?;"
             connect.execute(query, row)
-            log.info(f"{user.effective_user.name} ({user.effective_user.id}) unsubscribed from ticker {ticker.upper()}")
+            log.info(
+                f"{user.effective_user.name} ({user.effective_user.id}) unsubscribed from ticker {ticker.upper()}"
+            )
     except sqlite3.IntegrityError:
         pass
 
@@ -127,13 +137,17 @@ def del_subscribe_on_new_ticker(ticker, user):
 def subscribe_portfolio(pf, user):
     for pos in pf["payload"]["positions"]:
         subscribe_on_new_ticker(pos["ticker"], user)
-        log.info(f"{user.effective_user.name} ({user.effective_user.id}) subscribed own portfolio")
+        log.info(
+            f"{user.effective_user.name} ({user.effective_user.id}) subscribed own portfolio"
+        )
 
 
 def del_subscribe_portfolio(pf, user):
     for pos in pf["payload"]["positions"]:
         del_subscribe_on_new_ticker(pos["ticker"], user)
-        log.info(f"{user.effective_user.name} ({user.effective_user.id}) unsubscribed own portfolio")
+        log.info(
+            f"{user.effective_user.name} ({user.effective_user.id}) unsubscribed own portfolio"
+        )
 
 
 def show_list_of_subscribes(user):
@@ -141,8 +155,10 @@ def show_list_of_subscribes(user):
     connect = sqlite3.connect(create_db.DB_NAME)
     try:
         with connect:
-            query = f"SELECT ticker, name FROM tickers WHERE id=?;" 
-            log.info(f"{user.effective_user.name} ({user.effective_user.id}) invoking list of subscribers")
+            query = f"SELECT ticker, name FROM tickers WHERE id=?;"
+            log.info(
+                f"{user.effective_user.name} ({user.effective_user.id}) invoking list of subscribers"
+            )
             return connect.execute(query, row).fetchall()
     except sqlite3.IntegrityError:
         pass
@@ -185,13 +201,15 @@ def show_ticker_info(ticker, user):
     connect = sqlite3.connect(create_db.DB_NAME)
     if tk["payload"]["instruments"]:
         price = client.get_market_orderbook(
-            figi = tk["payload"]["instruments"][0]["figi"], depth=3
+            figi=tk["payload"]["instruments"][0]["figi"], depth=3
         )["payload"]["lastPrice"]
         query = "SELECT * FROM tickers WHERE id=? AND ticker=?;"
         try:
             with connect:
                 result = connect.execute(query, row).fetchall()[0]
-                log.info(f"{user.effective_user.name} ({user.effective_user.id}) invoking ticker {result[2]} info def")
+                log.info(
+                    f"{user.effective_user.name} ({user.effective_user.id}) invoking ticker {result[2]} info def"
+                )
                 return {
                     "ticker": result[2],
                     "name": result[3],
@@ -219,9 +237,9 @@ def show_ticker_info_by_id(ticker, id):
     tk = search_ticker(ticker)
     connect = sqlite3.connect(create_db.DB_NAME)
     if tk["payload"]["instruments"]:
-        
+
         price = client.get_market_orderbook(
-            figi = tk["payload"]["instruments"][0]["figi"], depth = 3
+            figi=tk["payload"]["instruments"][0]["figi"], depth=3
         )["payload"]["lastPrice"]
         query = "SELECT * FROM tickers WHERE id=? AND ticker=?;"
         try:
@@ -261,12 +279,14 @@ def override_price(id, ticker_info):
     except sqlite3.IntegrityError:
         pass
 
+
 def get_username_tickers():
     polling_list = dict()
     users_table = show_usernames_from_db()
     for line in users_table:
         polling_list.update({line[0]: show_list_of_subscribes_by_id(line[0])})
     return polling_list
+
 
 def get_time_of_last_news(ticker):
     row = (ticker[0],)
@@ -278,11 +298,12 @@ def get_time_of_last_news(ticker):
     except sqlite3.IntegrityError:
         pass
 
+
 def update_news_info(ticker, news):
-    row_create = (ticker[0], news['header'], news['time'])
-    row_update = (news['header'], news['time'], ticker[0])
+    row_create = (ticker[0], news["header"], news["time"])
+    row_update = (news["header"], news["time"], ticker[0])
     connect = sqlite3.connect(create_db.DB_NAME)
-    print (get_time_of_last_news(ticker)[0][0])
+    print(get_time_of_last_news(ticker)[0][0])
     try:
         with connect:
             if not get_time_of_last_news(ticker)[0][0]:
@@ -295,20 +316,21 @@ def update_news_info(ticker, news):
         pass
 
 
-def get_news_by_ticker (ticker):
+def get_news_by_ticker(ticker):
     rezult = requests.get(f"https://bcs-express.ru/category?tag={ticker[0].lower()}")
     base = "https://bcs-express.ru"
     soup = BeautifulSoup(rezult.text, "lxml")
     try:
-        page = soup.find("div", attrs={"class" : "feed-item"})
+        page = soup.find("div", attrs={"class": "feed-item"})
         header = page.find("div", attrs={"class": "feed-item__title"}).text
     except AttributeError as err:
-        log.error(f"Ticker {ticker[0]} not found: {err}")
+        log.warning(f"Ticker {ticker[0]} not found: {err}")
         return None
     time = page.find("div", attrs={"class": "feed-item__date"}).text
     href = base + re.findall('.*href="(\S+)".*', str(page))[0]
     text = page.find("div", attrs={"class": "feed-item__summary"}).text
-    return {"time" : time, "header" : header, "text" : text, "href" : href}
+    return {"time": time, "header": header, "text": text, "href": href}
+
 
 #######################################TELEGRAM FUNCTIONS##########################################################
 
@@ -494,7 +516,7 @@ def show_ticker(update, context):
 
 async def interval_polling():
     flag = True
-    while True:    
+    while True:
         for id in get_username_tickers():
             for ticker in get_username_tickers()[id]:
                 rez = show_ticker_info_by_id(ticker[0], id)
@@ -514,19 +536,22 @@ async def interval_polling():
                     override_price(id, rez)
         await asyncio.sleep(POLLING_INTERVAL)
 
+
 async def interval_news():
-    while True:    
+    while True:
         for id in get_username_tickers():
             for ticker in get_username_tickers()[id]:
-                rez = get_news_by_ticker (ticker)
-                if rez and get_time_of_last_news(ticker)[0][0] != rez['time']:
-                    message = (f"{ticker[0]}<em>{rez['time']}</em>\n"
-                               f"<b>{rez['header']}</b>\n"
-                               f"{rez['text']}\n"
-                               f"{rez['href']}")
+                rez = get_news_by_ticker(ticker)
+                if rez and get_time_of_last_news(ticker)[0][0] != rez["time"]:
+                    message = (
+                        f"{ticker[0]}<em>{rez['time']}</em>\n"
+                        f"<b>{rez['header']}</b>\n"
+                        f"{rez['text']}\n"
+                        f"{rez['href']}"
+                    )
                     sender.sendMessage(
                         chat_id=id, parse_mode=ParseMode.HTML, text=message
-                        )
+                    )
                     log.info(
                         f"Ticker {ticker[0]} fresh news from {rez['time']} message sent to {id}"
                     )
@@ -534,33 +559,44 @@ async def interval_news():
                 await asyncio.sleep(5)
         await asyncio.sleep(NEWS_INTERVAL)
 
+
 def unknown(update, context):
-    log.info(f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}")
+    log.info(
+        f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}"
+    )
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="Такой команды нет, выбери нужную команду из списка.",
     )
 
+
 def unknown_text(update, context):
-    log.info(f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}")
+    log.info(
+        f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}"
+    )
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="Допускаются только команды /.",
     )
 
+
 def error_handler(update, context):
     log.error(f"Возникла ошибка {context.error}")
-    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
-    tb_string = ''.join(tb_list)
+    tb_list = traceback.format_exception(
+        None, context.error, context.error.__traceback__
+    )
+    tb_string = "".join(tb_list)
     update_str = update.to_dict() if isinstance(update, Update) else str(update)
     message = (
-    f'Возникло исключение при обработке сообщения.\n'
-    f'<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}'
-    '</pre>\n\n'
-    f'<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n'
-    f'<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n'
-    f'<pre>{html.escape(tb_string)}</pre>')
+        f"Возникло исключение при обработке сообщения.\n"
+        f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}"
+        "</pre>\n\n"
+        f"<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n"
+        f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
+        f"<pre>{html.escape(tb_string)}</pre>"
+    )
     context.bot.send_message(chat_id=176549646, text=message, parse_mode=ParseMode.HTML)
+
 
 start_handler = CommandHandler("start", start)
 dispatcher.add_handler(start_handler)
@@ -588,17 +624,18 @@ unknown_command_handler = MessageHandler(
 )  # Если приходит команда, которую не знаем - пускаем функцию unknown
 dispatcher.add_handler(unknown_command_handler)
 
-unknown_text_handler = MessageHandler(Filters.text, unknown_text) # Отвечаем на любые не команды
+unknown_text_handler = MessageHandler(
+    Filters.text, unknown_text
+)  # Отвечаем на любые не команды
 dispatcher.add_handler(unknown_text_handler)
 
 # Обработчик ошибок
 dispatcher.add_error_handler(error_handler)
 
+
 async def main():
-    await asyncio.gather(
-        interval_polling(),
-        interval_news()
-    )
+    await asyncio.gather(interval_polling(), interval_news())
+
 
 if __name__ == "__main__":
     updater.start_polling()
