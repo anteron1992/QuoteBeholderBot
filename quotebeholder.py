@@ -303,7 +303,6 @@ def update_news_info(ticker, news):
     row_create = (ticker[0], news["header"], news["time"])
     row_update = (news["header"], news["time"], ticker[0])
     connect = sqlite3.connect(create_db.DB_NAME)
-    print(get_time_of_last_news(ticker)[0][0])
     try:
         with connect:
             if not get_time_of_last_news(ticker)[0][0]:
@@ -323,12 +322,12 @@ def get_news_by_ticker(ticker):
     try:
         page = soup.find("div", attrs={"class": "feed-item"})
         header = page.find("div", attrs={"class": "feed-item__title"}).text
+        time = page.find("div", attrs={"class": "feed-item__date"}).text
+        href = base + re.findall('.*href="(\S+)".*', str(page))[0]
+        text = page.find("div", attrs={"class": "feed-item__summary"}).text
     except AttributeError as err:
         log.warning(f"Ticker {ticker[0]} not found: {err}")
         return None
-    time = page.find("div", attrs={"class": "feed-item__date"}).text
-    href = base + re.findall('.*href="(\S+)".*', str(page))[0]
-    text = page.find("div", attrs={"class": "feed-item__summary"}).text
     return {"time": time, "header": header, "text": text, "href": href}
 
 
@@ -544,10 +543,10 @@ async def interval_news():
                 rez = get_news_by_ticker(ticker)
                 if rez and get_time_of_last_news(ticker)[0][0] != rez["time"]:
                     message = (
-                        f"{ticker[0]}<em>{rez['time']}</em>\n"
+                        f"<a href='{rez['href']}'>{ticker[0]}</a>\n"
+                        f"<em>{rez['time']}</em>\n"
                         f"<b>{rez['header']}</b>\n"
                         f"{rez['text']}\n"
-                        f"{rez['href']}"
                     )
                     sender.sendMessage(
                         chat_id=id, parse_mode=ParseMode.HTML, text=message
