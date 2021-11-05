@@ -5,6 +5,7 @@ import logging
 import re
 import sqlite3
 import traceback
+import yaml
 from logging.handlers import RotatingFileHandler
 from math import fabs
 from os import getenv, path
@@ -289,23 +290,25 @@ def get_username_tickers():
 
 
 def get_time_of_last_news(ticker):
-    row = (ticker[0],)
+    row = (ticker,)
     connect = sqlite3.connect(create_db.DB_NAME)
     try:
         with connect:
             query = f"SELECT time FROM news WHERE ticker=?"
-            return connect.execute(query, row).fetchall()
+            rez = connect.execute(query, row).fetchall()
+            if rez: return rez[0][0]
+            else: return "new"
     except sqlite3.IntegrityError:
         pass
 
 
 def update_news_info(ticker, news):
-    row_create = (ticker[0], news["header"], news["time"])
-    row_update = (news["header"], news["time"], ticker[0])
+    row_create = (ticker, news["header"], news["time"])
+    row_update = (news["header"], news["time"], ticker)
     connect = sqlite3.connect(create_db.DB_NAME)
     try:
         with connect:
-            if not get_time_of_last_news(ticker)[0][0]:
+            if  get_time_of_last_news(ticker) == "new":
                 query = "INSERT INTO news VALUES (?, ?, ?, datetime('now'));"
                 connect.execute(query, row_create)
             else:
@@ -315,9 +318,11 @@ def update_news_info(ticker, news):
         pass
 
 
-def get_news_by_ticker(ticker):
-    rezult = requests.get(f"https://bcs-express.ru/category?tag={ticker[0].lower()}")
+def get_news_by_ticker(ticker, special_tickers_dict):
+    if ticker in special_tickers_dict.keys():
+        ticker = special_tickers_dict[ticker]
     base = "https://bcs-express.ru"
+    rezult = requests.get(base + f"/category?tag={ticker.lower()}")
     soup = BeautifulSoup(rezult.text, "lxml")
     try:
         page = soup.find("div", attrs={"class": "feed-item"})
@@ -326,7 +331,7 @@ def get_news_by_ticker(ticker):
         href = base + re.findall('.*href="(\S+)".*', str(page))[0]
         text = page.find("div", attrs={"class": "feed-item__summary"}).text
     except AttributeError as err:
-        log.warning(f"Ticker {ticker[0]} not found: {err}")
+        log.warning(f"Ticker {ticker} not found: {err}")
         return None
     return {"time": time, "header": header, "text": text, "href": href}
 
@@ -538,24 +543,27 @@ async def interval_polling():
 
 async def interval_news():
     while True:
+        with open ("exception_list.уaml") as f:
+            special_tickers_dict = yaml.safe_load(f)
         for id in get_username_tickers():
             for ticker in get_username_tickers()[id]:
-                rez = get_news_by_ticker(ticker)
-                if rez and get_time_of_last_news(ticker)[0][0] != rez["time"]:
-                    message = (
-                        f"<a href='{rez['href']}'>{ticker[0]}</a>\n"
-                        f"<em>{rez['time']}</em>\n"
-                        f"<b>{rez['header']}</b>\n"
-                        f"{rez['text']}\n"
-                    )
-                    sender.sendMessage(
-                        chat_id=id, parse_mode=ParseMode.HTML, text=message
-                    )
-                    log.info(
-                        f"Ticker {ticker[0]} fresh news from {rez['time']} message sent to {id}"
-                    )
-                    update_news_info(ticker, rez)
-                await asyncio.sleep(5)
+                rez = get_news_by_ticker(ticker[0], special_tickers_dict)
+                if rez and get_time_of_last_news(ticker[0]):
+                    if get_time_of_last_news(ticker[0]) != rez["time"]:
+                        message = (
+                            f"<a href='{rez['href']}'>{ticker[0]}</a>\n"
+                            f"<em>{rez['time']}</em>\n"
+                            f"<b>{rez['header']}</b>\n"
+                            f"{rez['text']}\n"
+                        )
+                        sender.sendMessage(
+                            chat_id=id, parse_mode=ParseMode.HTML, text=message
+                        )
+                        log.info(
+                            f"Ticker {ticker[0]} fresh news from {rez['time']} message sent to {id}"
+                        )
+                        update_news_info(ticker[0], rez)
+                #await asyncio.sleep(5)
         await asyncio.sleep(NEWS_INTERVAL)
 
 
