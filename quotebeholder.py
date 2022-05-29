@@ -6,6 +6,7 @@ import re
 import sqlite3
 import traceback
 import yaml
+import backoff
 from logging.handlers import RotatingFileHandler
 from math import fabs
 from os import getenv, path
@@ -644,9 +645,10 @@ async def main():
     await asyncio.gather(interval_polling(), interval_news())
 
 
-if __name__ == "__main__":
+@backoff.on_exception(backoff.expo, Exception, max_tries=3)
+def run ():
     updater.start_polling()
-    try:
-        asyncio.new_event_loop().run_until_complete(main())
-    except Exception as e:
-        log.exception("Exception: %r", e)
+    asyncio.new_event_loop().run_until_complete(main())
+
+if __name__ == "__main__":
+    run()
