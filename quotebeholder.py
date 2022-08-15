@@ -330,9 +330,9 @@ def get_news_by_ticker(ticker, special_tickers_dict):
         header = page.find("div", attrs={"class": "feed-item__title"}).text
         time = page.find("div", attrs={"class": "feed-item__date"}).text
         href = base + re.findall('.*href="(\S+)".*', str(page))[0]
-        text = page.find("div", attrs={"class": "feed-item__summary"}).text
+        text = page.find("div", attrs={"class": "feed-item__summary"}).texshow_ticker_info_by_id
     except AttributeError as err:
-        log.warning(f"Ticker {ticker} not found: {err}")
+        log.warning(f"Ticker {ticker} not found in news: {err}")
         return None
     return {"time": time, "header": header, "text": text, "href": href}
 
@@ -524,8 +524,12 @@ async def interval_polling():
     while True:
         for id in get_username_tickers():
             for ticker in get_username_tickers()[id]:
-                rez = show_ticker_info_by_id(ticker[0], id)
-                if fabs(rez["diff"]) >= PERCENT:
+                try:
+                    rez = show_ticker_info_by_id(ticker[0], id)
+                except Exception as err:
+                    log.error(f"Тикер {ticker[0]} c id {id} не найден")
+                    rez = None
+                if rez and fabs(rez["diff"]) >= PERCENT:
                     flag = False
                     tik = rez["ticker"]
                     diff = rez["diff"]
@@ -639,7 +643,6 @@ dispatcher.add_handler(unknown_text_handler)
 
 # Обработчик ошибок
 dispatcher.add_error_handler(error_handler)
-
 
 async def main():
     await asyncio.gather(interval_polling(), interval_news())

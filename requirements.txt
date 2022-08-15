@@ -12,3 +12,6 @@ beautifulsoup4==4.10.0
 bs4==0.0.1
 soupsieve==2.2.1
 pyaml==21.10.1
+wheel==0.37.1
+backoff==2.0.1
+python-dotenv==0.20.0
