@@ -1,7 +1,7 @@
 import requests
 from requests.exceptions import HTTPError
 
-class Tinvest:
+class TinvestAPI:
     """
     Класс для работы с OpenAPI 20.2 Тинькофф Инвестиции.
     """
