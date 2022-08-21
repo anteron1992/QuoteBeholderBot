@@ -1,62 +1,26 @@
 import asyncio
 import html
 import json
-import logging
-import re
-import sqlite3
 import traceback
 import yaml
 import backoff
-from logging.handlers import RotatingFileHandler
 from math import fabs
-from os import getenv, path
-from time import sleep
-
-import requests
-from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from tabulate import tabulate
-from telegram import Bot, InlineQueryResultArticle, InputTextMessageContent, ParseMode
-from telegram.ext import (
-    CommandHandler,
-    Filters,
-    InlineQueryHandler,
-    MessageHandler,
-    Updater,
-)
-from telegram.ext.dispatcher import run_async
 
-import create_db
-from tinvest import tinvestor
+
+
+
 
 POLLING_INTERVAL = 3600
 NEWS_INTERVAL = 1800
 PERCENT = 2.0
 
 
-formatter = logging.Formatter("{asctime} - {name} - {levelname} - {message}", style="{")
-# Пишется лог со всех модулей с severity DEBUG и выше в quotebeholder_debug.log
-debuging = logging.getLogger()
-debuging.setLevel(logging.DEBUG)
-all_log = RotatingFileHandler(
-    "/var/log/quotebeholder/quotebeholder_debug.log", maxBytes=1000000, backupCount=10
-)
-all_log.setLevel(logging.DEBUG)
-all_log.setFormatter(formatter)
-debuging.addHandler(all_log)
-# Логи самого приложения пишутся в quotebeholder.log
-log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
-logfile = logging.FileHandler("/var/log/quotebeholder/quotebeholder.log")
-logfile.setLevel(logging.INFO)
-logfile.setFormatter(formatter)
-log.addHandler(logfile)
 
 load_dotenv("auth.env")
-create_db.conndb()
-client = tinvestor.Tinvest(getenv("SAND_TOKEN"))
-updater = Updater(token=getenv("TELE_TOKEN"))
-dispatcher = updater.dispatcher
+
+
 # Отдельный экземпляр для отправки сообщений из async функции
 sender = Bot(token=getenv("TELE_TOKEN"))
 URL = f"https://api.telegram.org/bot{getenv('TELE_TOKEN')}/sendMessage"
@@ -69,12 +33,7 @@ URL = f"https://api.telegram.org/bot{getenv('TELE_TOKEN')}/sendMessage"
 #######################################TELEGRAM FUNCTIONS##########################################################
 
 
-def start(update, context):
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="QuoteBeholder это бот, который информирует об резких изменениях котировок.\nУкажите команду после '/'",
-    )
-    add_new_user_to_db(update)
+
 
 
 def subscribe(update, context):

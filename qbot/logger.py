@@ -1,3 +1,23 @@
-from loguru import logger
+import logging
+from logging.handlers import RotatingFileHandler
 
-# logger.add("/var/log/quotebeholder/quotebeholder.log", rotation="1 day", retention="30 days")
+
+formatter = logging.Formatter("{asctime} - {name} - {levelname} - {message}", style="{")
+
+# Пишется лог со всех модулей с severity DEBUG и выше в quotebeholder_debug.log
+debuging = logging.getLogger()
+debuging.setLevel(logging.DEBUG)
+all_log = RotatingFileHandler(
+    "/var/log/quotebeholder/quotebeholder_debug.log", maxBytes=1000000, backupCount=10
+)
+all_log.setLevel(logging.DEBUG)
+all_log.setFormatter(formatter)
+debuging.addHandler(all_log)
+
+# Логи самого приложения пишутся в quotebeholder.log
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logfile = logging.FileHandler("/var/log/quotebeholder/quotebeholder.log")
+logfile.setLevel(logging.INFO)
+logfile.setFormatter(formatter)
+logger.addHandler(logfile)
