@@ -1,5 +1,5 @@
 from requests import get
-# import BeautifulSoup
+from bs4 import BeautifulSoup
 from re import findall
 from qbot.logger import logger
 

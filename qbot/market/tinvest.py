@@ -12,7 +12,7 @@ class Tinvest:
     """
 
     def __init__(self, db="./tickers.db"):
-        dotenv_path = path.dirname(__file__).partition("QuoteBeholderBot")[0] + 'QuoteBeholderBot\\auth.env'
+        dotenv_path = './../../auth.env'
         if path.exists(dotenv_path):
             load_dotenv(dotenv_path)
         token = getenv("TINKOFF_TOKEN")
