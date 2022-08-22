@@ -26,6 +26,7 @@ def count_percent(last_price, new_price):
         (float(new_price) - float(last_price)) / (float(last_price) / 100)
     )
 
+
 def get_news_by_ticker(ticker, special_tickers_dict):
     if ticker in special_tickers_dict.keys():
         ticker = special_tickers_dict[ticker]

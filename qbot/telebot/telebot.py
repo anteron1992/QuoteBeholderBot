@@ -30,7 +30,7 @@ class Telebot():
         )
 
     def deploy (self, handler):
-        def wrapper (func):
+        def wrapper(func):
             if handler == CommandHandler:
                 start_handler = handler(func.__name__, func)
                 self.dispatcher.add_handler(start_handler)
