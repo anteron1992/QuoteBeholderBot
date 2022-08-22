@@ -1,16 +1,13 @@
 import asyncio
-from yaml import safe_load
 from math import fabs
-
 from qbot.market.tinvest import Tinvest
 from qbot.db.database import Database
 from qbot.logger import logger
-from qbot.telegram.telegram import Telegram
-from qbot.helpers import get_news_by_ticker
+from qbot.telebot.telebot import Telegram
+from qbot.helpers import get_news_by_ticker, CONFIG
 
 
-with open("../config/default-config.yml") as f:
-    CONFIG = safe_load(f)
+
 
 tinkoff = Tinvest()
 db = Database()

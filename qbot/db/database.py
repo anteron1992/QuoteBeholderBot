@@ -1,23 +1,26 @@
 import sqlite3
 from os import path
 from qbot.logger import logger
-from qbot.helpers import count_percent
+from qbot.helpers import count_percent, path_db, path_scheme, path_tests_db
+from pathlib import Path
 
 
 class Database:
-    def __init__(self, name: str = './tickers.db'):
-        self.name: str = name
-        self.scheme: str = './tickers_scheme.sql'
-        self._exist: bool = path.exists(name)
-        self._db = sqlite3.connect(self.name)
-
-        if not self._exist:
+    def __init__(self, tests=False):
+        self.name: str = 'tickers.db'
+        self.scheme: Path = path_scheme
+        if tests and path.exists(path_tests_db):
+            self.name: str = 'test_tickers.db'
+            self._db = sqlite3.connect(path_tests_db)
+        elif not tests and path.exists(path_db):
+            self._db = sqlite3.connect(path_db)
+        elif not path.exists(path_db):
             logger.info('Creating DB file')
             logger.info('Creating schema in DB')
             with open(self.scheme) as f:
                 schema = f.read()
                 self._db.executescript(schema)
-            self._db.close()
+                self._db.close()
 
     def add_new_user_to_db(self, uname: str, uid: int) -> bool:
         row = (uid, uname)
