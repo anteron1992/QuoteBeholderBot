@@ -12,7 +12,7 @@ from qbot.market.tinvest import Tinvest
 from qbot.db.database import Database
 
 
-class Telegram():
+class Telebot():
     """
     Class for representation of Telegram classes
     """

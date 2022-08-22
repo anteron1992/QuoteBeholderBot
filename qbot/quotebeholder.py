@@ -1,6 +1,6 @@
 import asyncio
 from tabulate import tabulate
-from qbot.telebot.telebot import Telegram
+from qbot.telebot.telebot import Telebot
 from qbot.db.database import Database
 from qbot.market.tinvest import Tinvest
 from qbot.logger import logger
@@ -11,11 +11,11 @@ from telegram.ext import (
 )
 
 tinkoff = Tinvest()
-telegram = Telegram()
+telegram = Telebot()
 db = Database()
 
 
-@telegram.deploy(handler=CommandHandler)
+@telebot.deploy(handler=CommandHandler)
 def start(update, context):
     context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -24,7 +24,7 @@ def start(update, context):
     db.add_new_user_to_db(update.effective_user.id, update.effective_user.name)
 
 
-@telegram.deploy(handler=CommandHandler)
+@telebot.deploy(handler=CommandHandler)
 def subscribe(update, context):
     if not db.check_user(update.effective_user.id):
         context.bot.send_message(
@@ -65,7 +65,7 @@ def subscribe(update, context):
         return
 
 
-@telegram.deploy(handler=CommandHandler)
+@telebot.deploy(handler=CommandHandler)
 def unsubscribe(update, context):
     if not db.check_user(update.effective_user.id):
         context.bot.send_message(
@@ -100,7 +100,7 @@ def unsubscribe(update, context):
         return
 
 
-@telegram.deploy(handler=CommandHandler)
+@telebot.deploy(handler=CommandHandler)
 def subscribe_pf(update, context):
     if not db.check_user(update.effective_user.id):
         context.bot.send_message(
@@ -129,7 +129,7 @@ def subscribe_pf(update, context):
         )
 
 
-@telegram.deploy(handler=CommandHandler)
+@telebot.deploy(handler=CommandHandler)
 def unsubscribe_pf(update, context):
     if not db.check_user(update.effective_user.id):
         context.bot.send_message(
@@ -158,7 +158,7 @@ def unsubscribe_pf(update, context):
         )
 
 
-@telegram.deploy(handler=CommandHandler)
+@telebot.deploy(handler=CommandHandler)
 def show_subscribe(update, context):
     if not db.check_user(update.effective_user.id):
         context.bot.send_message(
@@ -186,7 +186,7 @@ def show_subscribe(update, context):
         )
 
 
-@telegram.deploy(handler=CommandHandler)
+@telebot.deploy(handler=CommandHandler)
 def show_ticker(update, context):
     if not db.check_user(update.effective_user.id):
         context.bot.send_message(
@@ -218,7 +218,7 @@ def show_ticker(update, context):
         )
 
 
-@telegram.deploy(handler=MessageHandler)
+@telebot.deploy(handler=MessageHandler)
 def unknown(update, context):
     logger.info(
         f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}"
@@ -229,7 +229,7 @@ def unknown(update, context):
     )
 
 
-@telegram.deploy(handler=MessageHandler)
+@telebot.deploy(handler=MessageHandler)
 def unknown_text(update, context):
     logger.info(
         f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}"

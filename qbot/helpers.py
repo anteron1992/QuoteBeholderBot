@@ -5,10 +5,13 @@ from qbot.logger import logger
 from yaml import safe_load
 from pathlib import Path
 
+
+
 path_config = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'config' / 'default-config.yml'
 with open(path_config) as f:
     CONFIG = safe_load(f)
 
+auth_path = Path.home() / 'QuoteBeholderBot' / 'auth.env'
 path_db = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'db' / CONFIG['database_name']
 path_tests_db = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'tests' / 'data' / CONFIG['test_database_name']
 path_scheme = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'db' / CONFIG['db_scheme_name']

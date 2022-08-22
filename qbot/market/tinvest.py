@@ -4,18 +4,17 @@ from qbot.market.tinvest_api import TinvestAPI
 from qbot.exceptions import TokenNotFound, AccountNotFound
 from qbot.logger import logger
 from qbot.db.database import Database
-
-db = Database()
+from qbot.helpers import auth_path
 
 
 class Tinvest:
     """
     Class for representation of Tinkoff Invest python client
     """
-    def __init__(self):
-        dotenv_path = path.dirname(__file__).partition("QuoteBeholderBot")[0] + 'QuoteBeholderBot\\auth.env'
-        if path.exists(dotenv_path):
-            load_dotenv(dotenv_path)
+    def __init__(self, tests=False):
+        self.db = Database() if not tests else Database(tests=True)
+        if path.exists(auth_path):
+            load_dotenv(auth_path)
         token = getenv("TINKOFF_TOKEN")
         if token and isinstance(token, str):
             self.api = TinvestAPI(token)
@@ -38,19 +37,19 @@ class Tinvest:
         return self.api.get_market_orderbook(figi=figi, depth=3)["payload"]["lastPrice"]
 
     def subscribe_ticker(self, ticker: str, uname: str, uid: int) -> bool:
-        if db.check_user(uid):
+        if self.db.check_user(uid):
             ticker_info = self.search_ticker(ticker)
             price = self._get_price_by_figi(ticker_info['figi'])
-            if not db.check_ticker(ticker_info['ticker'], uid):
-                db.subscribe_on_new_ticker(uname, uid, ticker_info, price)
+            if not self.db.check_ticker(ticker_info['ticker'], uid):
+                self.db.subscribe_on_new_ticker(uname, uid, ticker_info, price)
                 return True
         return False
 
     def subscribe_portfolio(self, portfolio: dict, uname: str, uid: int) -> bool:
-        if db.check_user(uid):
+        if self.db.check_user(uid):
             for pos in portfolio["payload"]["positions"]:
                 self.subscribe_ticker(pos["ticker"], uname, uid)
-            if not "test" in db.name:
+            if not "test" in self.db.name:
                 logger.info(
                     f"{uname} ({uid}) subscribed own portfolio"
                 )
@@ -59,10 +58,10 @@ class Tinvest:
             return False
 
     def delete_subscribe_portfolio(self, portfolio: dict, uname: str, uid: int) -> bool:
-        if db.check_user(uid):
+        if self.db.check_user(uid):
             for pos in portfolio["payload"]["positions"]:
-                db.delete_subscribed_ticker(pos["ticker"], uname, uid)
-            if not "test" in db.name:
+                self.db.delete_subscribed_ticker(pos["ticker"], uname, uid)
+            if not "test" in self.db.name:
                 logger.info(
                     f"{uname} ({uid}) unsubscribed own portfolio"
                 )
@@ -74,19 +73,19 @@ class Tinvest:
         ticker_info = self.search_ticker(ticker)
         if ticker_info:
             price = self._get_price_by_figi(ticker_info['figi'])
-            return db.get_ticker_info_by_id(ticker_info, uid, price)
+            return self.db.get_ticker_info_by_id(ticker_info, uid, price)
 
     def show_summary_ticker_info(self, ticker: str, uname: str, uid: int) -> dict:
         ticker_info = self.search_ticker(ticker)
         if ticker_info:
             price = self._get_price_by_figi(ticker_info['figi'])
-            return db.get_summary_tickers_by_id(ticker_info, uname, uid, price)
+            return self.db.get_summary_tickers_by_id(ticker_info, uname, uid, price)
         else:
             raise ValueError(f"Тикер {ticker} не найден")
 
     def get_username_tickers(self) -> dict:
         polling_list = dict()
-        users_table = db.show_usernames()
+        users_table = self.db.show_usernames()
         for line in users_table:
-            polling_list.update({line[0]: db.show_list_of_subscribes_by_id(line[0])})
+            polling_list.update({line[0]: self.db.show_list_of_subscribes_by_id(line[0])})
         return polling_list

@@ -2,9 +2,7 @@ from qbot.market.tinvest import Tinvest
 from qbot.tests.data.data_market import PORTFOLIO
 from qbot.db.database import Database
 
-tinkoff = Tinvest()
-db = Database(tests=True)
-
+tinkoff = Tinvest(tests=True)
 
 def test_tinkoff_get_portfolio():
     result = tinkoff.get_portfolio()
@@ -20,11 +18,11 @@ def test_tinkoff_subscribtion_portfolio():
     assert tinkoff.delete_subscribe_portfolio(
         PORTFOLIO, uname="@Anteron", uid=176549646
     ) == True, "Problem with deleting of portfolio subscription, perhaps user not found in db"
-    assert db.check_ticker("SBER", uid=176549646) == False, "Ticker has been found after deletion"
+    assert tinkoff.db.check_ticker("SBER", uid=176549646) == False, "Ticker has been found after deletion"
     assert tinkoff.subscribe_portfolio(
         PORTFOLIO, uname="@Anteron", uid=176549646
     ) == True, "Problem with subscribing of portfolio, perhaps user not found in db"
-    assert db.check_ticker("SBER", uid=176549646) == True, "Ticker hasn't been found after addition"
+    assert tinkoff.db.check_ticker("SBER", uid=176549646) == True, "Ticker hasn't been found after addition"
 
 
 def test_tinkoff_brief_ticker_info():
