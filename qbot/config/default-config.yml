@@ -1,0 +1,5 @@
+polling_interval: 3600
+news_interval: 1800
+reaction_percent: 2.0
+exceptions:
+  EUR_RUB__TOM: eur-usd

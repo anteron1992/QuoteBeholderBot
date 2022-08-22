@@ -38,11 +38,19 @@ class Tinvest:
     def _get_price_by_figi(self, figi):
         return self.api.get_market_orderbook(figi=figi, depth=3)["payload"]["lastPrice"]
 
+    def subscribe_ticker(self, ticker: str, uname: str, uid: int) -> bool:
+        if self.db.check_user(uid):
+            ticker_info = self.search_ticker(ticker)
+            price = self._get_price_by_figi(ticker_info['figi'])
+            if not self.db.check_ticker(ticker_info['ticker'], uid):
+                self.db.subscribe_on_new_ticker(uname, uid, ticker_info, price)
+                return True
+        return False
+
     def subscribe_portfolio(self, portfolio: dict, uname: str, uid: int) -> bool:
         if self.db.check_user(uid):
             for pos in portfolio["payload"]["positions"]:
-                price = self._get_price_by_figi(pos['figi'])
-                self.db.subscribe_on_new_ticker(uname, uid, pos, price)
+                self.subscribe_ticker(pos["ticker"], uname, uid)
             if not "test" in self.db.name:
                 logger.info(
                     f"{uname} ({uid}) subscribed own portfolio"
@@ -77,7 +85,7 @@ class Tinvest:
         else:
             raise ValueError(f"Тикер {ticker} не найден")
 
-    def get_username_tickers(self) -> list:
+    def get_username_tickers(self) -> dict:
         polling_list = dict()
         users_table = self.db.show_usernames()
         for line in users_table:
