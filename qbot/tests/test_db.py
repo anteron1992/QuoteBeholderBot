@@ -2,7 +2,7 @@ from qbot.db.database import Database
 from qbot.tests.data.data_market import TICKER_INFO_FALSE, \
     TICKER_INFO_TRUE, TICKER_INFO_BRIEF_NEW, TICKER_INFO_BRIEF_OLD, NEWS_NEW, NEWS_OLD
 
-db = Database("./data/test_tickers.db")
+db = Database(tests=True)
 
 
 def test_database_ticker_checking():
