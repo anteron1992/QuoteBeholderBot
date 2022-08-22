@@ -3,7 +3,7 @@ from math import fabs
 from qbot.market.tinvest import Tinvest
 from qbot.db.database import Database
 from qbot.logger import logger
-from qbot.telebot.telebot import Telegram
+from qbot.telebot.telebot import Telebot
 from qbot.helpers import get_news_by_ticker, CONFIG
 
 
@@ -11,7 +11,7 @@ from qbot.helpers import get_news_by_ticker, CONFIG
 
 tinkoff = Tinvest()
 db = Database()
-telegram = Telegram()
+telegram = Telebot()
 
 async def interval_polling():
     flag = True

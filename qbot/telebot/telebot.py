@@ -42,3 +42,4 @@ class Telebot():
                 self.dispatcher.add_handler(unknown_command_handler)  # Default handler for unknown commands
         return wrapper
 
+
