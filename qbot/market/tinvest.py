@@ -1,10 +1,8 @@
-from os import getenv, path
-from dotenv import load_dotenv
+from os import getenv
 from qbot.market.tinvest_api import TinvestAPI
 from qbot.exceptions import TokenNotFound, AccountNotFound
 from qbot.logger import logger
 from qbot.db.database import Database
-from qbot.helpers import auth_path
 
 
 class Tinvest:
@@ -13,8 +11,6 @@ class Tinvest:
     """
     def __init__(self, tests=False):
         self.db = Database() if not tests else Database(tests=True)
-        if path.exists(auth_path):
-            load_dotenv(auth_path)
         token = getenv("TINKOFF_TOKEN")
         if token and isinstance(token, str):
             self.api = TinvestAPI(token)
@@ -36,19 +32,19 @@ class Tinvest:
     def _get_price_by_figi(self, figi):
         return self.api.get_market_orderbook(figi=figi, depth=3)["payload"]["lastPrice"]
 
-    def subscribe_ticker(self, ticker: str, uname: str, uid: int) -> bool:
-        if self.db.check_user(uid):
+    async def subscribe_ticker(self, ticker: str, uname: str, uid: int) -> bool:
+        if await self.db.check_user(uid):
             ticker_info = self.search_ticker(ticker)
             price = self._get_price_by_figi(ticker_info['figi'])
-            if not self.db.check_ticker(ticker_info['ticker'], uid):
-                self.db.subscribe_on_new_ticker(uname, uid, ticker_info, price)
+            if not await self.db.check_ticker(ticker_info['ticker'], uid):
+                await self.db.subscribe_on_new_ticker(uname, uid, ticker_info, price)
                 return True
         return False
 
-    def subscribe_portfolio(self, portfolio: dict, uname: str, uid: int) -> bool:
-        if self.db.check_user(uid):
+    async def subscribe_portfolio(self, portfolio: dict, uname: str, uid: int) -> bool:
+        if await self.db.check_user(uid):
             for pos in portfolio["payload"]["positions"]:
-                self.subscribe_ticker(pos["ticker"], uname, uid)
+                await self.subscribe_ticker(pos["ticker"], uname, uid)
             if not "test" in self.db.name:
                 logger.info(
                     f"{uname} ({uid}) subscribed own portfolio"
@@ -57,10 +53,10 @@ class Tinvest:
         else:
             return False
 
-    def delete_subscribe_portfolio(self, portfolio: dict, uname: str, uid: int) -> bool:
-        if self.db.check_user(uid):
+    async def delete_subscribe_portfolio(self, portfolio: dict, uname: str, uid: int) -> bool:
+        if await self.db.check_user(uid):
             for pos in portfolio["payload"]["positions"]:
-                self.db.delete_subscribed_ticker(pos["ticker"], uname, uid)
+                await self.db.delete_subscribed_ticker(pos["ticker"], uname, uid)
             if not "test" in self.db.name:
                 logger.info(
                     f"{uname} ({uid}) unsubscribed own portfolio"
@@ -69,23 +65,23 @@ class Tinvest:
         else:
             return False
 
-    def show_brief_ticker_info_by_id(self, ticker: str, uid: int) -> dict:
+    async def show_brief_ticker_info_by_id(self, ticker: str, uid: int) -> dict:
         ticker_info = self.search_ticker(ticker)
         if ticker_info:
             price = self._get_price_by_figi(ticker_info['figi'])
-            return self.db.get_ticker_info_by_id(ticker_info, uid, price)
+            return await self.db.get_ticker_info_by_id(ticker_info, uid, price)
 
-    def show_summary_ticker_info(self, ticker: str, uname: str, uid: int) -> dict:
+    async def show_summary_ticker_info(self, ticker: str, uname: str, uid: int) -> dict:
         ticker_info = self.search_ticker(ticker)
         if ticker_info:
             price = self._get_price_by_figi(ticker_info['figi'])
-            return self.db.get_summary_tickers_by_id(ticker_info, uname, uid, price)
+            return await self.db.get_summary_tickers_by_id(ticker_info, uname, uid, price)
         else:
             raise ValueError(f"Тикер {ticker} не найден")
 
-    def get_username_tickers(self) -> dict:
+    async def get_username_tickers(self) -> dict:
         polling_list = dict()
-        users_table = self.db.show_usernames()
+        users_table = await self.db.show_usernames()
         for line in users_table:
-            polling_list.update({line[0]: self.db.show_list_of_subscribes_by_id(line[0])})
+            polling_list.update({line[0]: await self.db.show_list_of_subscribes_by_id(line[0])})
         return polling_list

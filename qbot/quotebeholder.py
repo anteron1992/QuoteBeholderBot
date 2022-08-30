@@ -1,256 +1,187 @@
 import asyncio
+from os import getenv
 from tabulate import tabulate
-from qbot.telebot.telebot import Telebot
 from qbot.db.database import Database
 from qbot.market.tinvest import Tinvest
 from qbot.logger import logger
 from qbot.interval_actions import interval_polling, interval_news
-from telegram.ext import (
-    CommandHandler,
-    MessageHandler,
-)
+from aiogram import Bot, Dispatcher, executor, types
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 
 tinkoff = Tinvest()
-telegram = Telebot()
+bot = Bot(token=getenv("TELE_TOKEN"))
+dp = Dispatcher(bot)
 db = Database()
 
 
-@telegram.deploy(handler=CommandHandler)
-def start(update, context):
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="QuoteBeholder это бот, который информирует об резких изменениях котировок.\nУкажите команду после '/'",
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    await message.reply(
+        "QuoteBeholder это бот, который информирует об резких изменениях котировок.\nУкажите команду после '/'",
     )
-    db.add_new_user_to_db(update.effective_user.id, update.effective_user.name)
+    await db.add_new_user_to_db(message.from_user.id, message.from_user.username)
 
 
-@telegram.deploy(handler=CommandHandler)
-def subscribe(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
-        )
-        return
-    if context.args:
+@dp.message_handler(commands=['subscribe'])
+async def subscribe(message: types.Message):
+    if not await db.check_user(message.from_user.id):
+        await message.reply("Сначала нужно нажать /start")
+    if message.get_args():
         sub_tickers = list()
-        for ticker in context.args:
-            if not db.check_ticker(ticker, update.effective_user.id):
+        for ticker in message.get_args().split():
+            if not await db.check_ticker(ticker, message.from_user.id):
                 try:
-                    tinkoff.subscribe_ticker(
+                    await tinkoff.subscribe_ticker(
                         ticker,
-                        update.effective_user.name,
-                        update.effective_user.id
+                        message.from_user.username,
+                        message.from_user.id
                     )
                     sub_tickers.append(ticker)
                 except ValueError:
-                    context.bot.send_message(
-                        chat_id=update.effective_chat.id,
-                        text=f"Тикер {ticker} не найден.",
-                    )
+                    await message.reply(f"Тикер {ticker} не найден.")
             else:
-                context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=f"Вы уже подписаны на тикер {ticker} .",
-                )
+                await message.reply(f"Вы уже подписаны на тикер {ticker} .")
         if sub_tickers:
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"Вы успешно подписались на {', '.join(sub_tickers)}",
-            )
+            await message.reply(f"Вы успешно подписались на {', '.join(sub_tickers)}")
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="Не указаны тикеры, запустите команду так: /subscribe <TIK> или так /subscribe <TIK> <TIK> <TIK>",
+        await message.reply(
+            "Не указаны тикеры, запустите команду так: /subscribe <TIK> или так /subscribe <TIK> <TIK> <TIK>",
         )
-        return
 
 
-@telegram.deploy(handler=CommandHandler)
-def unsubscribe(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
-        )
+@dp.message_handler(commands=['unsubscribe'])
+async def unsubscribe(message: types.Message):
+    if not await db.check_user(message.from_user.id):
+        await message.reply("Сначала нужно нажать /start")
         return
-    if context.args:
+    if message.get_args():
         sub_tickers = list()
-        for ticker in context.args:
-            if db.check_ticker(ticker, update.effective_user.id):
-                db.delete_subscribed_ticker(
+        for ticker in message.get_args().split():
+            if await db.check_ticker(ticker, message.from_user.id):
+                await db.delete_subscribed_ticker(
                     ticker,
-                    update.effective_user.name,
-                    update.effective_user.id
+                    message.from_user.username,
+                    message.from_user.id
                 )
                 sub_tickers.append(ticker)
             else:
-                context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=f"Тикер {ticker} не найден в подписке.",
-                )
+                await message.reply(f"Тикер {ticker} не найден в подписке.")
         if sub_tickers:
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"{', '.join(sub_tickers)} удалены из подписки",
-            )
+            await message.reply(f"{', '.join(sub_tickers)} удалены из подписки")
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="Не указаны тикеры, запустите команду так: /del_subscribe <TIK> или так /subscribe <TIK> <TIK> <TIK>",
-        )
-        return
+        await message.reply(
+            "Не указаны тикеры, запустите команду так: /del_subscribe <TIK> или так /subscribe <TIK> <TIK> <TIK>")
 
 
-@telegram.deploy(handler=CommandHandler)
-def subscribe_pf(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
-        )
+@dp.message_handler(commands=['subscribe_portfolio'])
+async def subscribe_portfolio(message: types.Message):
+    if not await db.check_user(message.from_user.id):
+        await message.reply("Сначала нужно нажать /start")
         return
-    if context.args:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Для этой функции недоступны аргументы, запустите её без них.",
-        )
+    if message.get_args().split():
+        await message.reply("Для этой функции недоступны аргументы, запустите её без них.")
         return
-    if update.effective_user.id == 176549646:
-        tinkoff.subscribe_portfolio(
-            tinkoff.get_portfolio(update.effective_user.id),
-            update.effective_user.name,
-            update.effective_user.id
+    if message.from_user.id == 176549646:
+        await tinkoff.subscribe_portfolio(
+            tinkoff.get_portfolio(message.from_user.id),
+            message.from_user.username,
+            message.from_user.id
         )
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Подписка на портфель оформлена"
-        )
+        await message.reply(f"Подписка на портфель оформлена")
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Эта функция, к сожалению не доступна для вас.",
-        )
+        await message.reply(f"Эта функция, к сожалению не доступна для вас.")
 
 
-@telegram.deploy(handler=CommandHandler)
-def unsubscribe_pf(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
-        )
+@dp.message_handler(commands=['unsubscribe_portfolio'])
+async def unsubscribe_portfolio(message: types.Message):
+    if not await db.check_user(message.from_user.id):
+        await message.reply(f"Сначала нужно нажать /start")
         return
-    if context.args:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Для этой функции недоступны аргументы, запустите её без них.",
-        )
+    if message.get_args().split():
+        await message.reply(f"Для этой функции недоступны аргументы, запустите её без них.")
         return
-    if update.effective_user.id == 176549646:
-        tinkoff.delete_subscribe_portfolio(
-            tinkoff.get_portfolio(update.effective_user.id),
-            update.effective_user.name,
-            update.effective_user.id
+    if message.from_user.id == 176549646:
+        await tinkoff.delete_subscribe_portfolio(
+            tinkoff.get_portfolio(message.from_user.id),
+            message.from_user.username,
+            message.from_user.id
         )
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Подписка на портфель отключена"
-        )
+        await message.reply("Подписка на портфель отключена")
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Эта функция, к сожалению не доступна для вас.",
-        )
+        await message.reply("Эта функция, к сожалению не доступна для вас.")
 
 
-@telegram.deploy(handler=CommandHandler)
-def show_subscribe(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
-        )
+@dp.message_handler(commands=['show_subscribes'])
+async def show_subscribes(message: types.Message):
+    if not await db.check_user(message.from_user.id):
+        await message.reply("Сначала нужно нажать /start")
+        return
+    if message.get_args():
+        await message.reply(f"Для этой функции недоступны аргументы, запустите её без них.")
         return
     header = ["Тикер", "Название"]
-    if context.args:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Для этой функции недоступны аргументы, запустите её без них.",
-        )
-        return
-    subscribe_list = db.show_list_of_subscribes(update.effective_user.name, update.effective_user.id)
+    subscribe_list = await db.show_list_of_subscribes(message.from_user.username, message.from_user.id)
     if subscribe_list:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            parse_mode="Markdown",
-            text=f"`{tabulate(subscribe_list, headers=header, tablefmt='pipe', stralign='left')}`",
+        await message.reply(
+            f"`{tabulate(subscribe_list, headers=header, tablefmt='pipe', stralign='left')}`",
+            parse_mode="Markdown"
         )
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Ваш список на подписку пуст. Добавьте что-нибудь при помощи /subscribe",
-        )
+        await message.reply("Ваш список на подписку пуст. Добавьте что-нибудь при помощи /subscribe")
 
 
-@telegram.deploy(handler=CommandHandler)
-def show_ticker(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
-        )
+@dp.message_handler(commands=['show_ticker'])
+async def show_ticker(message: types.Message):
+    if not await db.check_user(message.from_user.id):
+        await message.reply("Сначала нужно нажать /start")
         return
-    if context.args:
-        for ticker in context.args:
+    if message.get_args():
+        for ticker in message.get_args().split():
             try:
-                rez = tinkoff.show_brief_ticker_info_by_id(ticker, update.effective_user.id)
+                rez = await tinkoff.show_brief_ticker_info_by_id(ticker, message.from_user.id)
             except ValueError:
-                context.bot.send_message(
-                    chat_id=update.effective_chat.id, text=f"Тикер {ticker} не найден."
-                )
+                await message.reply(f"Тикер {ticker} не найден.")
                 return
-            message = f"""*Тикер*: {rez['ticker']}
-*Имя*: {rez['name']}
-*Последняя цена*: {rez['last_price']}
-*Текущаяя цена*: {rez['curr_price']}
-*Разница*: {rez['diff']}
-#{rez['link']}"""
-            context.bot.send_message(
-                chat_id=update.effective_chat.id, parse_mode="Markdown", text=message
+            msg = (
+                f"*Тикер*: {rez['ticker']}\n"
+                f"*Имя*: {rez['name']}\n"
+                f"*Последняя цена*: {rez['last_price']}\n"
+                f"*Текущаяя цена*: {rez['curr_price']}\n"
+                f"*Разница*: {rez['diff']}"
             )
+            await message.reply(msg, parse_mode="Markdown")
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Не указаны тикеры, запустите команду так: /show_ticker <TIK> или так /show_ticker <TIK> <TIK> <TIK>",
+        await message.reply(
+            "Не указаны тикеры, запустите команду так: /show_ticker <TIK> или так /show_ticker <TIK> <TIK> <TIK>"
         )
 
 
-@telegram.deploy(handler=MessageHandler)
-def unknown(update, context):
+@dp.message_handler()
+async def unknown(message: types.Message):
     logger.info(
-        f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}"
+        f"{message.from_user.username} ({message.from_user.id}) sent unknown command: {message.get_args()}"
     )
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="Такой команды нет, выбери нужную команду из списка.",
-    )
+    if message.get_args().startswith("/"):
+        await message.reply("Такой команды нет, выбери нужную команду из списка.")
+    else:
+        await message.reply("Допускаются только команды /")
 
-
-@telegram.deploy(handler=MessageHandler)
-def unknown_text(update, context):
-    logger.info(
-        f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}"
-    )
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="Допускаются только команды /.",
-    )
+#CONFIG['polling_interval']
+#CONFIG['news_interval']
 
 
 async def main():
-    await asyncio.gather(
-        interval_polling(),
-        interval_news(),
-        asyncio.to_thread(telegram.updater.start_polling())
-    )
+    coro = [
+        await interval_polling(),
+        await interval_news(),
+    ]
+    return asyncio.as_completed(coro)
 
-
-def run():
-    asyncio.run(main())
 
 if __name__ == "__main__":
-    run()
-
+    loop = asyncio.new_event_loop()
+    loop.create_task(main())
+    loop.create_task(dp.start_polling())
+    asyncio.get_event_loop().run_until_complete(loop)
+    # executor.start_polling(dp, skip_updates=True, loop=loop)

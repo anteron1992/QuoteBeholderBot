@@ -6,43 +6,37 @@ from qbot.market.tinvest import Tinvest
 from qbot.logger import logger
 from qbot.helpers import path_db
 from qbot.interval_actions import interval_polling, interval_news
-from telegram.ext import (
-    Filters,
-    Updater,
-    CommandHandler,
-    MessageHandler,
-)
+from aiogram import Bot, Dispatcher, executor, types
+
 
 tinkoff = Tinvest()
 db = Database()
 
-updater = Updater(token=getenv("TELE_TOKEN"))
-dispatcher = updater.dispatcher
+bot = Bot(token=getenv("TELE_TOKEN"))
+dp = Dispatcher(bot)
 
-
-def start(update, context):
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    await message.reply(
         text=f"QuoteBeholder это бот, который информирует об резких изменениях котировок.\nУкажите команду после '/'",
     )
-    db.add_new_user_to_db(update.effective_user.id, update.effective_user.name)
+    db.add_new_user_to_db(message.chat.id, message.chat.first_name)
 
 
-def subscribe(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
+def subscribe(message: types.Message):
+    if not db.check_user(message.from_user.id):
+        await message.reply(f"Сначала нужно нажать /start"
         )
         return
-    if context.args:
+    if message.get_args():
         sub_tickers = list()
-        for ticker in context.args:
-            if not db.check_ticker(ticker, update.effective_user.id):
+        for ticker in message.get_args():
+            if not db.check_ticker(ticker, message.from_user.id):
                 try:
                     tinkoff.subscribe_ticker(
                         ticker,
-                        update.effective_user.name,
-                        update.effective_user.id
+                        message.from_user.username,
+                        message.from_user.id
                     )
                     sub_tickers.append(ticker)
                 except ValueError:
@@ -61,27 +55,24 @@ def subscribe(update, context):
                 text=f"Вы успешно подписались на {', '.join(sub_tickers)}",
             )
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="Не указаны тикеры, запустите команду так: /subscribe <TIK> или так /subscribe <TIK> <TIK> <TIK>",
+        await message.reply("Не указаны тикеры, запустите команду так: /subscribe <TIK> или так /subscribe <TIK> <TIK> <TIK>",
         )
         return
 
 
-def unsubscribe(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
+def unsubscribe(message: types.Message):
+    if not db.check_user(message.from_user.id):
+        await message.reply(f"Сначала нужно нажать /start"
         )
         return
-    if context.args:
+    if message.get_args():
         sub_tickers = list()
-        for ticker in context.args:
-            if db.check_ticker(ticker, update.effective_user.id):
+        for ticker in message.get_args():
+            if db.check_ticker(ticker, message.from_user.id):
                 db.delete_subscribed_ticker(
                     ticker,
-                    update.effective_user.name,
-                    update.effective_user.id
+                    message.from_user.username,
+                    message.from_user.id
                 )
                 sub_tickers.append(ticker)
             else:
@@ -95,83 +86,66 @@ def unsubscribe(update, context):
                 text=f"{', '.join(sub_tickers)} удалены из подписки",
             )
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="Не указаны тикеры, запустите команду так: /del_subscribe <TIK> или так /subscribe <TIK> <TIK> <TIK>",
+        await message.reply("Не указаны тикеры, запустите команду так: /del_subscribe <TIK> или так /subscribe <TIK> <TIK> <TIK>",
         )
         return
 
 
-def subscribe_pf(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
+def subscribe_pf(message: types.Message):
+    if not db.check_user(message.from_user.id):
+        await message.reply(f"Сначала нужно нажать /start"
         )
         return
-    if context.args:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Для этой функции недоступны аргументы, запустите её без них.",
+    if message.get_args():
+        await message.reply(f"Для этой функции недоступны аргументы, запустите её без них.",
         )
         return
-    if update.effective_user.id == 176549646:
+    if message.from_user.id == 176549646:
         tinkoff.subscribe_portfolio(
-            tinkoff.get_portfolio(update.effective_user.id),
-            update.effective_user.name,
-            update.effective_user.id
+            tinkoff.get_portfolio(message.from_user.id),
+            message.from_user.username,
+            message.from_user.id
         )
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Подписка на портфель оформлена"
+        await message.reply(f"Подписка на портфель оформлена"
         )
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Эта функция, к сожалению не доступна для вас.",
+        await message.reply(f"Эта функция, к сожалению не доступна для вас.",
         )
 
 
-def unsubscribe_pf(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
+def unsubscribe_pf(message: types.Message):
+    if not db.check_user(message.from_user.id):
+        await message.reply(f"Сначала нужно нажать /start"
         )
         return
-    if context.args:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Для этой функции недоступны аргументы, запустите её без них.",
+    if message.get_args():
+        await message.reply(f"Для этой функции недоступны аргументы, запустите её без них.",
         )
         return
-    if update.effective_user.id == 176549646:
+    if message.from_user.id == 176549646:
         tinkoff.delete_subscribe_portfolio(
-            tinkoff.get_portfolio(update.effective_user.id),
-            update.effective_user.name,
-            update.effective_user.id
+            tinkoff.get_portfolio(message.from_user.id),
+            message.from_user.username,
+            message.from_user.id
         )
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Подписка на портфель отключена"
+        await message.reply(f"Подписка на портфель отключена"
         )
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Эта функция, к сожалению не доступна для вас.",
+        await message.reply(f"Эта функция, к сожалению не доступна для вас.",
         )
 
 
-def show_subscribe(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
+def show_subscribe(message: types.Message):
+    if not db.check_user(message.from_user.id):
+        await message.reply(f"Сначала нужно нажать /start"
         )
         return
     header = ["Тикер", "Название"]
-    if context.args:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Для этой функции недоступны аргументы, запустите её без них.",
+    if message.get_args():
+        await message.reply(f"Для этой функции недоступны аргументы, запустите её без них.",
         )
         return
-    subscribe_list = db.show_list_of_subscribes(update.effective_user.name, update.effective_user.id)
+    subscribe_list = db.show_list_of_subscribes(message.from_user.username, message.from_user.id)
     if subscribe_list:
         context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -179,22 +153,19 @@ def show_subscribe(update, context):
             text=f"`{tabulate(subscribe_list, headers=header, tablefmt='pipe', stralign='left')}`",
         )
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Ваш список на подписку пуст. Добавьте что-нибудь при помощи /subscribe",
+        await message.reply(f"Ваш список на подписку пуст. Добавьте что-нибудь при помощи /subscribe",
         )
 
 
-def show_ticker(update, context):
-    if not db.check_user(update.effective_user.id):
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"Сначала нужно нажать /start"
+def show_ticker(message: types.Message):
+    if not db.check_user(message.from_user.id):
+        await message.reply(f"Сначала нужно нажать /start"
         )
         return
-    if context.args:
-        for ticker in context.args:
+    if message.get_args():
+        for ticker in message.get_args():
             try:
-                rez = tinkoff.show_brief_ticker_info_by_id(ticker, update.effective_user.id)
+                rez = tinkoff.show_brief_ticker_info_by_id(ticker, message.from_user.id)
             except ValueError:
                 context.bot.send_message(
                     chat_id=update.effective_chat.id, text=f"Тикер {ticker} не найден."
@@ -210,15 +181,13 @@ def show_ticker(update, context):
                 chat_id=update.effective_chat.id, parse_mode="Markdown", text=message
             )
     else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Не указаны тикеры, запустите команду так: /show_ticker <TIK> или так /show_ticker <TIK> <TIK> <TIK>",
+        await message.reply(f"Не указаны тикеры, запустите команду так: /show_ticker <TIK> или так /show_ticker <TIK> <TIK> <TIK>",
         )
 
 
-def unknown(update, context):
+def unknown(message: types.Message):
     logger.info(
-        f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}"
+        f"{message.from_user.username} ({message.from_user.id}) sent unknown command: {update.message.get_args()}"
     )
     context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -226,9 +195,9 @@ def unknown(update, context):
     )
 
 
-def unknown_text(update, context):
+def unknown_text(message: types.Message):
     logger.info(
-        f"{update.effective_user.name} ({update.effective_user.id}) sent unknown command: {update.message.text}"
+        f"{message.from_user.username} ({message.from_user.id}) sent unknown command: {update.message.get_args()}"
     )
     context.bot.send_message(
         chat_id=update.effective_chat.id,
