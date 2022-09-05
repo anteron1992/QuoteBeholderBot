@@ -1,3 +1,5 @@
+import dataclasses
+
 from yaml import safe_load
 from pathlib import Path
 from dotenv import load_dotenv

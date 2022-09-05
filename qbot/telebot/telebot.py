@@ -2,7 +2,7 @@ from os import getenv
 from tabulate import tabulate
 from aiogram import Bot, Dispatcher, types
 from qbot.logger import logger
-from qbot.app.app import application
+from qbot.app.application import application
 
 bot = Bot(token=getenv("TELE_TOKEN"))
 dp = Dispatcher(bot)

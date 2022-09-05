@@ -1,7 +1,7 @@
 from qbot.market.tinvest import Tinvest
 import pytest
 from qbot.tests.data.data_market import PORTFOLIO
-from qbot.app.app import application as app
+from qbot.app.application import application as app
 
 
 def test_tinkoff_get_portfolio():

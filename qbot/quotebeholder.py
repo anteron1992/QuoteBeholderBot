@@ -1,6 +1,6 @@
 import asyncio
 from qbot.logger import logger
-from qbot.app.app import application
+from qbot.app.application import application
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from qbot.telebot.telebot import dp, bot
 from qbot.interval_actions import Interval_actions
