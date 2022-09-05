@@ -9,8 +9,8 @@ class Tinvest:
     """
     Class for representation of Tinkoff Invest python client
     """
-    def __init__(self, tests=False):
-        self.db = Database() if not tests else Database(tests=True)
+    def __init__(self, db, tests=False):
+        self.db = db if not tests else Database(tests=True)
         token = getenv("TINKOFF_TOKEN")
         if token and isinstance(token, str):
             self.api = TinvestAPI(token)

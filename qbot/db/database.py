@@ -1,5 +1,4 @@
 import sqlite3
-import asyncio
 import aiosqlite
 from pathlib import Path
 from typing import Iterable,Any

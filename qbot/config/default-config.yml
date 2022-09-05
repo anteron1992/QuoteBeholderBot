@@ -1,5 +1,5 @@
-polling_interval: 3600
-news_interval: 1800
+ticker_interval: 60
+news_interval: 30
 reaction_percent: 2.0
 database_name: tickers.db
 test_database_name: test_tickers.db
