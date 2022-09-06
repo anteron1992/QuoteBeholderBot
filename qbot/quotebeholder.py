@@ -18,6 +18,7 @@ async def main():
         await dp.start_polling()
     finally:
         bot.get_session().close()
+        scheduler.shutdown()
         await asyncio.sleep(1)
 
 
