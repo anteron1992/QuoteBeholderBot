@@ -1,0 +1,8 @@
+ticker_interval: 60
+news_interval: 30
+reaction_percent: 2.0
+database_name: tickers.db
+test_database_name: test_tickers.db
+db_scheme_name: tickers_scheme.sql
+exceptions:
+  EUR_RUB__TOM: eur-usd
