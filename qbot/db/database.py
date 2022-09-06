@@ -258,12 +258,12 @@ class Database:
         except sqlite3.IntegrityError:
             pass
 
-    async def update_news_info(self, ticker: str, news: dict) -> bool:
+    async def update_news_info(self, ticker: str, news: dict, last: str) -> bool:
         row_create = (ticker, news["header"], news["time"])
         row_update = (news["header"], news["time"], ticker)
         try:
             async with aiosqlite.connect(self._db) as _db:
-                if await self.get_time_of_last_news(ticker) == "new":
+                if last == "new":
                     query = "INSERT INTO news VALUES (?, ?, ?, datetime('now'));"
                     await _db.execute(query, row_create)
                     await _db.commit()
@@ -274,3 +274,15 @@ class Database:
                 return True
         except sqlite3.IntegrityError:
             pass
+
+    async def delete_news_from_db(self, ticker: str) -> bool:
+        row = (ticker,)
+        query = f"DELETE FROM news WHERE ticker=?"
+        try:
+            async with aiosqlite.connect(self._db) as _db:
+                await _db.execute(query, row)
+                await _db.commit()
+                return True
+        except sqlite3.IntegrityError:
+            pass
+

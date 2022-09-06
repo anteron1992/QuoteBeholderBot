@@ -93,7 +93,11 @@ async def test_get_time_of_last_news():
 @pytest.mark.asyncio
 async def test_update_news_info():
     db = app(tests=True).db
-    assert await db.update_news_info("SBER", NEWS_NEW) == True, "Failed to update news info in db"
+    assert await db.update_news_info("SBER", NEWS_NEW, '1 января в 00:00') == True, "Failed to update news info in db"
     assert await db.get_time_of_last_news("SBER") == '1 января в 00:00', "Failed try to get time of last news"
-    assert await db.update_news_info("SBER", NEWS_OLD) == True, "Failed to update news info in db"
+    assert await db.update_news_info("SBER", NEWS_OLD, '8 июля в 08:45') == True, "Failed to update news info in db"
     assert await db.get_time_of_last_news("SBER") == '8 июля в 08:45', "Failed try to get time of last news"
+    assert await db.update_news_info("TEST", NEWS_NEW, 'new') == True, "Failed to update new news info in db"
+    assert await db.get_time_of_last_news("TEST") == '1 января в 00:00', "Failed try to get time of last news"
+    assert await db.delete_news_from_db("TEST") == True, "Failed try delete test ticker"
+

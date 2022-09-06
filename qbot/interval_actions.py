@@ -34,7 +34,6 @@ class Interval_actions:
         return False
 
     async def ticker_polling(self):
-        print(1)
         tickers = await self.tinkoff.get_username_tickers()
         for uid in tickers:
             for ticker in tickers[uid]:
@@ -56,14 +55,21 @@ class Interval_actions:
                     await self.db.override_price(rez, uid)
 
     async def news_polling(self):
-        print(2)
         special_tickers_dict = self.config['exceptions']
         tickers = await self.tinkoff.get_username_tickers()
         for uid in tickers:
             for ticker in tickers[uid]:
                 rez = get_news_by_ticker(ticker[0], special_tickers_dict)
+                if rez:
+                    logger.info(
+                        f"[{uid}] Has got new news by ticker {ticker[0]}, checking..."
+                    )
                 last = await self.db.get_time_of_last_news(ticker[0])
                 if rez and last:
+                    if last == "new":
+                        logger.info(
+                            f"[{uid}] There is no any news {ticker[0]}, add to db..."
+                        )
                     if last != rez["time"]:
                         message = (
                             f"<a href='{rez['href']}'>{ticker[0]}</a>\n"
@@ -75,4 +81,4 @@ class Interval_actions:
                         logger.info(
                             f"Ticker {ticker[0]} fresh news from {rez['time']} message sent to {uid}"
                         )
-                        await self.db.update_news_info(ticker[0], rez)
+                        await self.db.update_news_info(ticker[0], rez, last)
