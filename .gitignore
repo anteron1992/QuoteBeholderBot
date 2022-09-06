@@ -3,3 +3,4 @@ auth.env
 venv/
 qbot/tests/data/*
 qbot/db/tickers.db
+qbot/tests/data/test_tickers.db
