@@ -79,7 +79,7 @@ async def subscribe_portfolio(message: types.Message):
     # TODO: Сделать функцию публичной для других людей
     if message.from_user.id == 176549646:
         await app.market['tinkoff'].subscribe_portfolio(
-            app.market['tinkoff'].get_portfolio(message.from_user.id),
+            app.market['tinkoff'].get_portfolio(getenv("TINKOFF_ACCOUNT_ID")),
             message.from_user.username,
             message.from_user.id
         )
@@ -98,7 +98,7 @@ async def unsubscribe_portfolio(message: types.Message):
         return
     if message.from_user.id == 176549646:
         await app.market['tinkoff'].delete_subscribe_portfolio(
-            app.market['tinkoff'].get_portfolio(message.from_user.id),
+            app.market['tinkoff'].get_portfolio(getenv("TINKOFF_ACCOUNT_ID")),
             message.from_user.username,
             message.from_user.id
         )

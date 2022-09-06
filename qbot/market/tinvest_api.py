@@ -7,7 +7,7 @@ class TinvestAPI:
     Класс для работы с OpenAPI 20.2 Тинькофф Инвестиции.
     """
     #####Приватные методы#####
-    def __init__ (self, token):
+    def __init__(self, token):
         """
         Конструктор класса, забираем у пользователя токен и формируем заголовок запроса.
         """
@@ -15,7 +15,7 @@ class TinvestAPI:
         self.__url = "https://api-invest.tinkoff.ru/openapi/"
         self.__headers = {"accept": "application/json", "Authorization": f"Bearer {token}"}
 
-    def __exec_req (self, url=None):
+    def __exec_req(self, url=None):
         """
         Внутренний метод запроса, возвращает результат в json формате.
         """
@@ -40,20 +40,20 @@ class TinvestAPI:
                 logger.error("f'Ошибка {req} - {err2}'")
                 raise Exception (f'Ошибка HTTP {req} - {err2}')
 
-    def __format_time (self, time):
+    def __format_time(self, time):
         try:
             return time.replace(":", "%3A").replace("+", "%2B")
         except Exception:
             return None
 
     ####REST API Тинькофф Инвестиции#####
-    def get_user_accounts (self):
+    def get_user_accounts(self):
         """
         Получаение списка счетов пользователя, без атрибутов.
         """
         return self.__exec_req (self.__url + "user/accounts")
 
-    def get_portfolio (self, account_id=None):
+    def get_portfolio(self, account_id=None):
         """
         Получение состава портфеля, может принимать необязательный атрибут account_id, для
         указания id счёта пользователя, по умолчанию выводит состав основного брокерского счёта
@@ -63,7 +63,7 @@ class TinvestAPI:
             url += f"?brokerAccountId={str(account_id)}"
         return self.__exec_req (url)
 
-    def get_portfolio_currencies (self, account_id=None):
+    def get_portfolio_currencies(self, account_id=None):
         """
         Получение валютных активов счёта, необязательный атрибут: account_id=<int/str>
         """
@@ -72,31 +72,31 @@ class TinvestAPI:
             url += f"?brokerAccountId={str(account_id)}"
         return self.__exec_req (url)
 
-    def get_market_stocks (self):
+    def get_market_stocks(self):
         """
         Получение списка акций на рынке, без атрибутов.
         """
         return self.__exec_req (self.__url + "market/stocks")
 
-    def get_market_bonds (self):
+    def get_market_bonds(self):
         """
         Получение списка облигаций на рынке, без атрибутов.
         """
         return self.__exec_req (self.__url + "market/bonds")
 
-    def get_market_etfs (self):
+    def get_market_etfs(self):
         """
         Получение списка ETF на рынке, без атрибутов.
         """
         return self.__exec_req (self.__url + "market/etfs")
 
-    def get_market_by_ticker (self, ticker):
+    def get_market_by_ticker(self, ticker):
         url = self.__url + "market/search/by-ticker"
         if ticker:
             url += f"?ticker={ticker}"
         return self.__exec_req (url)
 
-    def get_operations (self, frm=None, to=None, figi=None, ticker=None, account_id=None):
+    def get_operations(self, frm=None, to=None, figi=None, ticker=None, account_id=None):
         """
         Получение списка операций на рынке. Обязательные атрибуты: frm <time>, to <time>
         Формат времени: 2021-07-13T17:43:33+03:00

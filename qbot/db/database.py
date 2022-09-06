@@ -274,16 +274,3 @@ class Database:
                 return True
         except sqlite3.IntegrityError:
             pass
-
-
-# async def main():
-#    a = Database(tests=True)
-#    print(await a.add_new_user_to_db("Test", uid=123456789))
-    # print(await a.check_user(uid=123456789) == True)
-    # print(await a.delete_user_from_db("Test", uid=123456789))
-    # print(await a.check_user(uid=176549646))
-    # print(await a.check_ticker("AAPL", uid=176549646))
-    # print(await a.get_price_by_ticker("AAPL", uid=176549646))
-
-
-#asyncio.run(main())
