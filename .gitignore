@@ -2,3 +2,4 @@ __pycache__/
 auth.env
 venv/
 qbot/tests/data/*
+qbot/db/tickers.db
