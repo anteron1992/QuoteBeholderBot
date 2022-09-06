@@ -22,8 +22,8 @@
     * TINKOFF_TOKEN - Токен для Тинькофф API (подойдет для sandbox)
     * TINKOFF_ACCOUNT_ID - ID вашего аккаунта в Тинькофф Инвестиции
     * TELE_TOKEN - Токен вашего Телеграм бота
-4) Заходим в каталог и создаем виртуальное окружение `python3.9 -m venv ./venv`
-5) Активируем его `source venv/bin/activate`
+3) Заходим в каталог и создаем виртуальное окружение `python3.9 -m venv ./venv`
+4) Активируем его `source venv/bin/activate`
 
 :warning: Чтобы каждый раз не активировать venv, можете добавить себе его в bashrc:
 
@@ -32,4 +32,5 @@ echo "source ~/QuoteBeholderBot/venv/bin/activate" >> ~/.basrc
 exec bash
 ```
 5) Устанавливаем все необходимые пакеты и зависимости `pip install .`
-6) Запускаем `quotebeholder.py`
+6) Запускаем `pytest .` в `qbot/tests`, проверяем что все ок и готово к работе
+7) Запускаем `qbot/quotebeholder.py`
