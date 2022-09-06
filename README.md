@@ -28,7 +28,7 @@
 :warning: Чтобы каждый раз не активировать venv, можете добавить себе его в bashrc:
 
 ```
-echo "source ~/QuoteBeholderBot/venv/bin/activate" >> ~/.basrc
+echo "source ~/QuoteBeholderBot/venv/bin/activate" >> ~/.bashrc
 exec bash
 ```
 5) Устанавливаем все необходимые пакеты и зависимости `pip install .`
