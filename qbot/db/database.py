@@ -10,13 +10,7 @@ from qbot.logger import logger
 class Database:
     def __init__(self, tests=False):
         self.scheme: Path = config.path_scheme
-        if tests and Path.exists(config.path_tests_db):
-            self.name: str = 'test_tickers.db'
-            self._db = config.path_tests_db
-        elif not tests and Path.exists(config.path_db):
-            self.name: str = 'tickers.db'
-            self._db = config.path_db
-        elif not Path.exists(config.path_db):
+        if not Path.exists(config.path_db):
             logger.info('Creating DB file')
             logger.info('Creating schema in DB')
             with open(self.scheme) as f:
@@ -24,8 +18,14 @@ class Database:
                 _db = sqlite3.connect(config.path_db)
                 _db.executescript(schema)
                 _db.close()
+        if tests and Path.exists(config.path_tests_db):
+            self.name: str = 'test_tickers.db'
+            self._db = config.path_tests_db
+        elif not tests and Path.exists(config.path_db):
+            self.name: str = 'tickers.db'
+            self._db = config.path_db
 
-    async def add_new_user_to_db(self, uid: int, uname: str) -> bool:
+    async def add_new_user_to_db(self, uname: str, uid: int) -> bool:
         row = (uid, uname)
         query = "INSERT INTO usernames VALUES (?, ?, datetime('now'))"
         try:

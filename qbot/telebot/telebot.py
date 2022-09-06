@@ -14,7 +14,7 @@ async def start(message: types.Message):
     await message.reply(
         "QuoteBeholder это бот, который информирует об резких изменениях котировок.\nУкажите команду после '/'",
     )
-    await app.db.add_new_user_to_db(message.from_user.id, message.from_user.username)
+    await app.db.add_new_user_to_db(message.from_user.username, message.from_user.id)
 
 
 @dp.message_handler(commands=['subscribe'])
