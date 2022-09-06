@@ -25,7 +25,7 @@ class Database:
                 _db.executescript(schema)
                 _db.close()
 
-    async def add_new_user_to_db(self, uname: str, uid: int) -> bool:
+    async def add_new_user_to_db(self, uid: int, uname: str) -> bool:
         row = (uid, uname)
         query = "INSERT INTO usernames VALUES (?, ?, datetime('now'))"
         try:
