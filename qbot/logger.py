@@ -2,7 +2,11 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 
-formatter = logging.Formatter("{asctime} - {name} - {levelname} - {message}", style="{")
+formatter = logging.Formatter(
+    "{asctime} | {filename}:{funcName} | {levelname} | {message}",
+    "%Y-%m-%d %H:%M:%S",
+    style="{"
+)
 
 # Пишется лог со всех модулей с severity DEBUG и выше в quotebeholder_debug.log
 debuging = logging.getLogger()

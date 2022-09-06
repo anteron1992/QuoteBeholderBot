@@ -128,7 +128,6 @@ async def show_subscribes(message: types.Message):
 
 @dp.message_handler(commands=['show_ticker'])
 async def show_ticker(message: types.Message):
-    # TODO: Сделать дефолт для тикеров не добавленных в портфель
     if not await app.db.check_user(message.from_user.id):
         await message.reply("Сначала нужно нажать /start")
         return

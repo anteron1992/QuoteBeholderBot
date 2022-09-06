@@ -170,13 +170,22 @@ class Database:
                 async with aiosqlite.connect(self._db) as _db:
                     cursor = await _db.execute(query, row)
                     result = await cursor.fetchall()
-                    return {
-                       "name": result[0][3],
-                       "ticker": result[0][2],
-                       "last_price": result[0][4],
-                       "curr_price": price,
-                       "diff": float(count_percent(result[0][4], price)),
-                    }
+                    if result:
+                        return {
+                           "name": result[0][3],
+                           "ticker": result[0][2],
+                           "last_price": result[0][4],
+                           "curr_price": price,
+                           "diff": float(count_percent(result[0][4], price)),
+                        }
+                    else:
+                        return {
+                                "name": ticker_info['name'],
+                                "ticker": ticker_info['ticker'],
+                                "last_price": "Тикер не добавлен в подписки",
+                                "curr_price": price,
+                                "diff": "Тикер не добавлен в подписки"
+                            }
             except (sqlite3.IntegrityError, sqlite3.OperationalError, IndexError):
                 pass
 
