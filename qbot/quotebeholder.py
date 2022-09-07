@@ -11,10 +11,10 @@ actions = Interval_actions(app)
 
 async def main():
     scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
-    scheduler.add_job(actions.ticker_polling, "interval", minutes=app.config['ticker_interval'])
-    scheduler.add_job(actions.news_polling, "interval", minutes=app.config['news_interval'])
-    scheduler.start()
+    scheduler.add_job(actions.ticker_polling, "interval", minutes=app.config['ticker_interval'], args=(bot,))
+    scheduler.add_job(actions.news_polling, "interval", minutes=app.config['news_interval'], args=(bot,))
     try:
+        scheduler.start()
         await dp.start_polling()
     finally:
         bot.get_session().close()
