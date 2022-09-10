@@ -1,8 +1,21 @@
-ticker_interval: 60
-news_interval: 30
+ticker_interval: 1
+news_interval: 2
 reaction_percent: 2.0
-database_name: tickers.db
-test_database_name: test_tickers.db
-db_scheme_name: tickers_scheme.sql
+
+db_scheme: tickers_scheme.sql
+# Database for testing
+db_test: qbot_test
+# Data for testing db
+db_test_data: test_tickers.sql
+# Default password for postgres role, if required
+db_defpass: '12345'
+# Main connection params
+postgresql:
+  host: localhost
+  port: 5432
+  database: qbot
+  user: qbot
+  password: qbot
+# Ticker mapping for ticker <> RBC tag
 exceptions:
   EUR_RUB__TOM: eur-usd

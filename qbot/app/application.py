@@ -4,7 +4,7 @@ from qbot.config.config import CONFIG
 
 
 class __Init_app:
-    def __init__(self, tests=False):
+    def __init__(self, tests):
         self.config = CONFIG
         self.db = Database(tests)
         self.market = {
@@ -13,7 +13,5 @@ class __Init_app:
 
 
 def application(tests=False):
-    if tests:
-        return __Init_app(tests=True)
-    else:
-        return __Init_app()
+    obj = __Init_app(tests)
+    return obj

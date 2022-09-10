@@ -2,15 +2,14 @@ from os import getenv
 from qbot.market.tinvest_api import TinvestAPI
 from qbot.exceptions import TokenNotFound, AccountNotFound
 from qbot.logger import logger
-from qbot.db.database import Database
 
 
 class Tinvest:
     """
     Class for representation of Tinkoff Invest python client
     """
-    def __init__(self, db, tests=False):
-        self.db = db if not tests else Database(tests=True)
+    def __init__(self, db):
+        self.db = db
         token = getenv("TINKOFF_TOKEN")
         if token and isinstance(token, str):
             self.api = TinvestAPI(token)
@@ -27,7 +26,9 @@ class Tinvest:
             raise AccountNotFound("Tinkoff account 'TINKOFF_ACCOUNT_ID' not found into env vars!")
 
     def search_ticker(self, ticker: str) -> dict:
-        return self.api.get_market_by_ticker(ticker)["payload"]["instruments"][0]
+        instruments = self.api.get_market_by_ticker(ticker)["payload"]["instruments"]
+        if instruments:
+            return instruments[0]
 
     def _get_price_by_figi(self, figi):
         return self.api.get_market_orderbook(figi=figi, depth=3)["payload"]["lastPrice"]
@@ -35,20 +36,18 @@ class Tinvest:
     async def subscribe_ticker(self, ticker: str, uname: str, uid: int) -> bool:
         if await self.db.check_user(uid):
             ticker_info = self.search_ticker(ticker)
-            price = self._get_price_by_figi(ticker_info['figi'])
-            if not await self.db.check_ticker(ticker_info['ticker'], uid):
-                await self.db.subscribe_on_new_ticker(uname, uid, ticker_info, price)
-                return True
-        return False
+            if ticker_info:
+                price = self._get_price_by_figi(ticker_info['figi'])
+                if not await self.db.check_ticker(ticker_info['ticker'], uid):
+                    await self.db.subscribe_on_new_ticker(uname, uid, ticker_info, price)
+                    return True
+            return False
 
     async def subscribe_portfolio(self, portfolio: dict, uname: str, uid: int) -> bool:
         if await self.db.check_user(uid):
             for pos in portfolio["payload"]["positions"]:
                 await self.subscribe_ticker(pos["ticker"], uname, uid)
-            if not "test" in self.db.name:
-                logger.info(
-                    f"{uname} ({uid}) subscribed own portfolio"
-                )
+            logger.info(f"{uname} ({uid}) subscribed own portfolio")
             return True
         else:
             return False
@@ -57,10 +56,7 @@ class Tinvest:
         if await self.db.check_user(uid):
             for pos in portfolio["payload"]["positions"]:
                 await self.db.delete_subscribed_ticker(pos["ticker"], uname, uid)
-            if not "test" in self.db.name:
-                logger.info(
-                    f"{uname} ({uid}) unsubscribed own portfolio"
-                )
+                logger.info(f"{uname} ({uid}) unsubscribed own portfolio")
             return True
         else:
             return False
@@ -83,5 +79,5 @@ class Tinvest:
         polling_list = dict()
         users_table = await self.db.show_usernames()
         for line in users_table:
-            polling_list.update({line[0]: await self.db.show_list_of_subscribes_by_id(line[0])})
+            polling_list.update({line: await self.db.show_list_of_subscribes_by_id(line)})
         return polling_list

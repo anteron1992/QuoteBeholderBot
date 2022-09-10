@@ -15,6 +15,7 @@ if Path.exists(auth_path):
     load_dotenv(auth_path)
 else:
     logger.error("auth.env not found in root folder!")
-path_db = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'db' / CONFIG['database_name']
-path_tests_db = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'tests' / 'data' / CONFIG['test_database_name']
-path_scheme = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'db' / CONFIG['db_scheme_name']
+# path_db = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'db' / CONFIG['database_name']
+# path_tests_db = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'tests' / 'data' / CONFIG['test_database_name']
+path_scheme = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'db' / CONFIG['db_scheme']
+test_scheme = Path.home() / 'QuoteBeholderBot' / 'qbot' / 'tests' / 'data' / CONFIG['db_test_data']
