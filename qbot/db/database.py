@@ -87,7 +87,7 @@ class Database:
         else:
             logger.critical("SQL Scheme not found!")
             raise exceptions.DatabaseSchemeError
-        self._pool.append(await asyncpg.create_pool(**self.config, max_size=100))
+        self._pool.append(await asyncpg.create_pool(**self.config))
         logger.info(f'Database initialisation completed')
 
     async def close_pool(self):
