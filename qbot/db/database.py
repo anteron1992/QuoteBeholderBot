@@ -1,215 +1,232 @@
-import sqlite3
-import aiosqlite
+import asyncpg
+import qbot.exceptions as exceptions
 from pathlib import Path
-from typing import Iterable,Any
-from qbot.config import config
+from typing import Iterable, Any
+from qbot.config.config import CONFIG, path_scheme, test_scheme
 from qbot.helpers import count_percent
 from qbot.logger import logger
 
 
+class DatabaseConnect:
+    def __init__(self, host, port, database, user, password, tests=False):
+        self.connect = None
+        self.config = {
+            "host": host,
+            "port": port,
+            "database": CONFIG['db_test'] if tests else database,
+            "user": user,
+            "password": password,
+        }
+
+    async def __aenter__(self):
+        logger.info(f'Try to connect to database {self.config["database"]}')
+        try:
+            self.connection = await asyncpg.connect(**self.config)
+            return self.connection
+        except asyncpg.exceptions.ConnectionDoesNotExistError as err:
+            logger.critical(
+                f"Unable connect to {self.config['database']}: {err}"
+            )
+            raise exceptions.DatabaseConnectionError
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        logger.info(f'Closing connection to database {self.config["database"]}')
+        await self.connection.close()
+
+
 class Database:
+
+    _pool = []
+
     def __init__(self, tests=False):
-        self.scheme: Path = config.path_scheme
-        if not Path.exists(config.path_db):
-            logger.info('Creating DB file')
-            logger.info('Creating schema in DB')
-            with open(self.scheme) as f:
+        self.scheme: Path = path_scheme if path_scheme.exists() else None
+        self.test_scheme: Path = test_scheme if test_scheme.exists() else None
+        self.tests = tests
+        self.config = CONFIG['postgresql']
+
+    async def init(self):
+        logger.info('Database initialisation')
+        # Use default template1 for prod db creation
+        async with DatabaseConnect(
+                host=self.config['host'],
+                port="5432",
+                database="template1",
+                user="postgres",
+                password=CONFIG['db_defpass']
+        ) as conn:
+            try:
+                await conn.execute(f"CREATE DATABASE {self.config['database']};")
+                await conn.execute(f"CREATE DATABASE {CONFIG['db_test']};")
+            except asyncpg.exceptions.DuplicateDatabaseError:
+                logger.info('Database qbot already exists')
+            try:
+                await conn.execute(
+                    f"""
+                    CREATE USER {self.config['user']} WITH PASSWORD '{self.config['password']}';
+                    GRANT ALL PRIVILEGES ON DATABASE 
+                    {self.config['database']}, {CONFIG['db_test']} TO {self.config['user']};
+                    """
+                )
+            except asyncpg.exceptions.DuplicateObjectError:
+                logger.info('Role qbot already exists')
+
+        # Scheme database creation
+        if self.scheme and self.test_scheme:
+            with open(self.scheme) as f, open(self.test_scheme) as tf:
                 schema = f.read()
-                _db = sqlite3.connect(config.path_db)
-                _db.executescript(schema)
-                _db.close()
-        if tests and Path.exists(config.path_tests_db):
-            self.name: str = 'test_tickers.db'
-            self._db = config.path_tests_db
-        elif not tests and Path.exists(config.path_db):
-            self.name: str = 'tickers.db'
-            self._db = config.path_db
+                t_schema = tf.read()
+                if self.tests:
+                    self.config["database"] = CONFIG['db_test']
+                async with DatabaseConnect(**self.config) as _db:
+                    try:
+                        await _db.execute(schema)
+                    except asyncpg.exceptions.DuplicateTableError:
+                        logger.warning("Database scheme initialised already, skip...")
+                    if self.tests and not await _db.fetchrow("SELECT * FROM tickers;"):
+                        await _db.execute(t_schema)
+        else:
+            logger.critical("SQL Scheme not found!")
+            raise exceptions.DatabaseSchemeError
+        self._pool.append(await asyncpg.create_pool(**self.config))
+        logger.info(f'Database initialisation completed')
+
+    async def close_pool(self):
+        await self._pool[0].release(self._pool)
 
     async def add_new_user_to_db(self, uname: str, uid: int) -> bool:
-        row = (uid, uname)
-        query = "INSERT INTO usernames VALUES (?, ?, datetime('now'))"
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                if not await self.check_user(uid=uid):
-                    await _db.execute(query, row)
-                    await _db.commit()
-                    if not "test" in self.name:
-                        logger.info(
-                            f"New user {uname} ({uid}) added to db"
-                        )
-                    return True
-                else:
-                    return False
-        except sqlite3.IntegrityError:
-            pass
+        query = [
+            """
+        INSERT INTO usernames VALUES ($1, $2, to_char(now(), 'YYYY-MM-DD HH24:MI:SS'));
+        """, uid, uname
+        ]
+        async with self._pool[0].acquire() as _db:
+            if not await self.check_user(uid=uid):
+                add = bool(await _db.execute(*query))
+                logger.info(f"New user with ID {uid} has been added to db")
+                return add
+            return False
 
     async def delete_user_from_db(self, uname: str, uid: int) -> bool:
-        row = (uid, uname)
-        query = "DELETE FROM usernames WHERE id=? AND username=?"
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                if await self.check_user(uid=uid):
-                    await _db.execute(query, row)
-                    await _db.commit()
-                    if not "test" in self.name:
-                        logger.info(
-                            f"User {uname} ({uid}) has been removed from db"
-                        )
-                    return True
-                else:
-                    return False
-        except sqlite3.IntegrityError:
-            pass
+        query = [
+            """
+        DELETE FROM usernames WHERE id=$1 AND username=$2;
+        """, uid, uname
+        ]
+        async with self._pool[0].acquire() as _db:
+            if await self.check_user(uid=uid):
+                return bool(await _db.execute(*query))
+            return False
 
     async def check_user(self, uid: int) -> bool:
-        row = (uid,)
-        query = f"SELECT * FROM usernames WHERE id=?;"
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                cursor = await _db.execute(query, row)
-                if await cursor.fetchall():
-                    return True
-                else:
-                    return False
-        except (sqlite3.IntegrityError, sqlite3.OperationalError):
-            pass
+        query = ["SELECT 1 FROM usernames WHERE id=$1;", uid]
+        async with self._pool[0].acquire() as _db:
+            return bool(await _db.fetchrow(*query))
 
     async def check_ticker(self, ticker: str, uid: int) -> bool:
-        row = (uid, ticker.upper())
-        query = "SELECT ticker FROM tickers WHERE id=? AND ticker=?"
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                cursor = await _db.execute(query, row)
-                return bool(await cursor.fetchall())
-        except sqlite3.IntegrityError:
-            pass
+        query = ["SELECT ticker FROM tickers WHERE id=$1 AND ticker=$2;", uid, ticker.upper()]
+        async with self._pool[0].acquire() as _db:
+            return bool(await _db.fetchrow(*query))
 
     async def subscribe_on_new_ticker(self, uname: str, uid: int, ticker_info: dict, price: float) -> bool:
-        if ticker_info:
+        if ticker_info and not await self.check_ticker(ticker_info["ticker"], uid):
             ticker = ticker_info["ticker"]
             name = ticker_info["name"]
-            row = (
+            row = [
                 uid,
                 uname,
                 ticker,
                 name,
                 price,
-            )
-            try:
-                if not await self.check_ticker(ticker, uid) and await self.check_user(uid):
-                    async with aiosqlite.connect(self._db) as _db:
-                        query = "INSERT INTO tickers VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))"
-                        await _db.execute(query, row)
-                        await _db.commit()
-                        if not "test" in self.name:
-                            logger.info(
-                                f"{uname} ({uid}) subscribed on new ticker {ticker}"
-                            )
-                        return True
-                else:
-                    return False
-            except sqlite3.IntegrityError:
-                pass
+            ]
+            query = [
+                """
+            INSERT INTO tickers VALUES (
+            $1, $2, $3, $4, $5, 
+            to_char(now(), 'YYYY-MM-DD HH24:MI:SS'), 
+            to_char(now(), 'YYYY-MM-DD HH24:MI:SS')
+            );
+            """, *row
+            ]
+            async with self._pool[0].acquire() as _db:
+                result = await _db.execute(*query)
+                logger.info(f"{uname} ({uid}) subscribed on new ticker {ticker}")
+                return bool(result)
+        return False
 
     async def delete_subscribed_ticker(self, ticker: str, uname: str, uid: int) -> bool:
-        row = (uid, ticker.upper())
-        query = "DELETE FROM tickers WHERE id=? AND ticker=?;"
-        try:
-            if await self.check_ticker(ticker, uid) and await self.check_user(uid):
-                async with aiosqlite.connect(self._db) as _db:
-                    await _db.execute(query, row)
-                    await _db.commit()
-                    if not "test" in self.name:
-                        logger.info(
-                            f"{uname} ({uid}) unsubscribed from ticker {ticker.upper()}"
-                        )
-                    return True
-            else:
-                return False
-        except sqlite3.IntegrityError:
-            pass
+        query = ["DELETE FROM tickers WHERE id=$1 AND ticker=$2;", uid, ticker.upper()]
+        if await self.check_ticker(ticker, uid) and await self.check_user(uid):
+            async with self._pool[0].acquire() as _db:
+                result = await _db.execute(*query)
+                logger.info(f"{uname} ({uid}) unsubscribed from ticker {ticker.upper()}")
+                return bool(result)
+        return False
 
     async def show_list_of_subscribes(self, uname: str, uid: int) -> Iterable[Any]:
-        row = (uid,)
-        query = "SELECT ticker, name FROM tickers WHERE id=?;"
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                if not "test" in self.name:
-                    logger.info(
-                        f"{uname} ({uid}) invoking list of subscribers"
-                    )
-                cursor = await _db.execute(query, row)
-                return await cursor.fetchall()
-        except sqlite3.IntegrityError:
-            pass
+        query = ["SELECT ticker, name FROM tickers WHERE id=$1;", uid]
+        async with self._pool[0].acquire() as _db:
+            result = await _db.fetch(*query)
+            logger.info(f"{uname} ({uid}) invoking list of subscribers")
+            result = [(k, v) for k, v in dict(result).items()]
+            return result
 
     async def show_list_of_subscribes_by_id(self, uid: int) -> Iterable[Any]:
-        row = (uid,)
-        query = f"SELECT ticker FROM tickers WHERE id=?"
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                cursor = await _db.execute(query, row)
-                return await cursor.fetchall()
-        except sqlite3.IntegrityError:
-            pass
+        query = [f"SELECT ticker FROM tickers WHERE id=$1", uid]
+        ticker_list = []
+        async with self._pool[0].acquire() as _db:
+            result = await _db.fetch(*query)
+            for ticker in tuple(result):
+                ticker_list += list(ticker)
+            return ticker_list
 
     async def show_usernames(self) -> Iterable[Any]:
-        query = "SELECT id FROM usernames;"
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                cursor = await _db.execute(query)
-                return await cursor.fetchall()
-        except sqlite3.IntegrityError:
-            pass
+        query = ["SELECT id FROM usernames;"]
+        user_list = []
+        async with self._pool[0].acquire() as _db:
+            result = await _db.fetch(*query)
+            for user in tuple(result):
+                user_list += list(user)
+            return user_list
 
     async def get_ticker_info_by_id(self, ticker_info: dict, uid: int, price: float) -> dict:
-        row = (uid, ticker_info["ticker"].upper())
-        query = "SELECT * FROM tickers WHERE id=? AND ticker=?;"
+        query = ["SELECT * FROM tickers WHERE id=$1 AND ticker=$2;", uid, ticker_info["ticker"].upper()]
         if await self.check_user(uid):
-            try:
-                async with aiosqlite.connect(self._db) as _db:
-                    cursor = await _db.execute(query, row)
-                    result = await cursor.fetchall()
-                    if result:
-                        return {
-                           "name": result[0][3],
-                           "ticker": result[0][2],
-                           "last_price": result[0][4],
-                           "curr_price": price,
-                           "diff": float(count_percent(result[0][4], price)),
+            async with self._pool[0].acquire() as _db:
+                result = await _db.fetchrow(*query)
+                if result:
+                    result = dict(result)
+                    return {
+                       "name": result["name"],
+                       "ticker": result["ticker"],
+                       "last_price":  result["price"],
+                       "curr_price": price,
+                       "diff": float(count_percent(result["price"], price)),
+                    }
+                else:
+                    return {
+                            "name": ticker_info['name'],
+                            "ticker": ticker_info['ticker'],
+                            "last_price": "Тикер не добавлен в подписки",
+                            "curr_price": price,
+                            "diff": "Тикер не добавлен в подписки"
                         }
-                    else:
-                        return {
-                                "name": ticker_info['name'],
-                                "ticker": ticker_info['ticker'],
-                                "last_price": "Тикер не добавлен в подписки",
-                                "curr_price": price,
-                                "diff": "Тикер не добавлен в подписки"
-                            }
-            except (sqlite3.IntegrityError, sqlite3.OperationalError, IndexError):
-                pass
 
     async def get_summary_tickers_by_id(self, ticker_info: dict, uname: str, uid: int, price: float) -> dict:
-        row = (uid, ticker_info["ticker"].upper())
-        query = "SELECT * FROM tickers WHERE id=? AND ticker=?;"
+        query = ["SELECT * FROM tickers WHERE id=$1 AND ticker=$2;", uid, ticker_info["ticker"].upper()]
         if await self.check_user(uid):
-            try:
-                async with aiosqlite.connect(self._db) as _db:
-                    cursor = await _db.execute(query, row)
-                    result = await cursor.fetchall()
-                    if not "test" in self.name:
-                        logger.info(
-                            f"{uname} ({uid}) invoking ticker {ticker_info['ticker'].upper()} info def"
-                        )
+            async with self._pool[0].acquire() as _db:
+                result = await _db.fetchrow(*query)
+                logger.info(f"{uname} ({uid}) invoking ticker {ticker_info['ticker'].upper()} info def")
+                if result:
+                    result = dict(result)
                     return {
-                        "ticker": result[0][2],
-                        "name": result[0][3],
-                        "last_price": result[0][4],
+                        "name": result["name"],
+                        "ticker": result["ticker"],
+                        "last_price": result["price"],
                         "curr_price": price,
-                        "diff": str(count_percent(result[0][4], price)) + "%",
-                        "link": "https://bcs-express.ru/kotirovki-i-grafiki/" + ticker_info["ticker"],
+                        "diff": str(count_percent(result["price"], price)) + "%",
+                        "link": "https://bcs-express.ru/kotirovki-i-grafiki/" + result["ticker"],
                     }
-            except (sqlite3.IntegrityError, sqlite3.OperationalError, IndexError):
                 return {
                     "ticker": ticker_info["ticker"],
                     "name": ticker_info["name"],
@@ -221,68 +238,54 @@ class Database:
                 }
 
     async def get_price_by_ticker(self, ticker: str, uid: int) -> float:
-        row = (ticker,)
-        query = "SELECT price FROM tickers WHERE ticker=?"
+        query = ["SELECT price FROM tickers WHERE ticker=$1;", ticker]
         if await self.check_user(uid) and await self.check_ticker(ticker, uid):
-            try:
-                async with aiosqlite.connect(self._db) as _db:
-                    cursor = await _db.execute(query, row)
-                    result = await cursor.fetchall()
-                    return float(result[0][0])
-            except sqlite3.IntegrityError:
-                pass
+            async with self._pool[0].acquire() as _db:
+                result = await _db.fetchrow(*query)
+                return tuple(result)[0]
 
     async def override_price(self, ticker_info: dict, uid: int) -> bool:
-        row = (ticker_info["curr_price"], uid, ticker_info["ticker"])
-        query = "UPDATE tickers SET price=?, updated=datetime('now') WHERE id=? AND ticker=?;"
-        if await self.check_user(uid):
-            try:
-                async with aiosqlite.connect(self._db) as _db:
-                    await _db.execute(query, row)
-                    await _db.commit()
-            except sqlite3.IntegrityError:
-                pass
-            return True
+        query = [
+            """
+            UPDATE tickers SET price=$1, updated=to_char(now(), 'YYYY-MM-DD HH24:MI:SS') 
+            WHERE id=$2 AND ticker=$3;
+            """, ticker_info["curr_price"], uid, ticker_info["ticker"]
+        ]
+        if await self.check_user(uid) and await self.check_ticker(ticker_info["ticker"], uid):
+            async with self._pool[0].acquire() as _db:
+                return bool(await _db.execute(*query))
+        return False
 
     async def get_time_of_last_news(self, ticker: str) -> str:
-        row = (ticker,)
-        query = f"SELECT time FROM news WHERE ticker=?"
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                cursor = await _db.execute(query, row)
-                result = await cursor.fetchall()
-                if result:
-                    return result[0][0]
-                else:
-                    return "new"
-        except sqlite3.IntegrityError:
-            pass
+        query = [f"SELECT time FROM news WHERE ticker=$1", ticker]
+        async with self._pool[0].acquire() as _db:
+            result = await _db.fetchrow(*query)
+            if result:
+                return tuple(result)[0]
+            else:
+                return "new"
 
     async def update_news_info(self, ticker: str, news: dict, last: str) -> bool:
-        row_create = (ticker, news["header"], news["time"])
-        row_update = (news["header"], news["time"], ticker)
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                if last == "new":
-                    query = "INSERT INTO news VALUES (?, ?, ?, datetime('now'));"
-                    await _db.execute(query, row_create)
-                    await _db.commit()
-                else:
-                    query = "UPDATE news SET header=?, time=?, updated=datetime('now') WHERE ticker=?;"
-                    await _db.execute(query, row_update)
-                    await _db.commit()
-                return True
-        except sqlite3.IntegrityError:
-            pass
+        row_create = [ticker, news["header"], news["time"]]
+        row_update = [news["header"], news["time"], ticker]
+        async with self._pool[0].acquire() as _db:
+            if last == "new":
+                query = [
+                    """
+                    INSERT INTO news VALUES ($1, $2, $3, to_char(now(), 'YYYY-MM-DD HH24:MI:SS'));
+                    """, *row_create
+                ]
+                return bool(await _db.execute(*query))
+            else:
+                query = [
+                    """
+                    UPDATE news SET header=$1, time=$2, 
+                    updated=to_char(now(), 'YYYY-MM-DD HH24:MI:SS') WHERE ticker=$3;
+                    """, *row_update
+                ]
+                return bool(await _db.execute(*query))
 
     async def delete_news_from_db(self, ticker: str) -> bool:
-        row = (ticker,)
-        query = f"DELETE FROM news WHERE ticker=?"
-        try:
-            async with aiosqlite.connect(self._db) as _db:
-                await _db.execute(query, row)
-                await _db.commit()
-                return True
-        except sqlite3.IntegrityError:
-            pass
-
+        query = [f"DELETE FROM news WHERE ticker=$1;", ticker]
+        async with self._pool[0].acquire() as _db:
+            return bool(await _db.execute(*query))

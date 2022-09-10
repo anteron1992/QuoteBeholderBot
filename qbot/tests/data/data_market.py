@@ -16,12 +16,12 @@ TICKER_INFO_TRUE = {'currency': 'USD',
                               'ticker': 'AAPL',
                               'type': 'Stock'}
 
-TICKER_INFO_BRIEF_NEW = {'ticker': 'AAPL', 'last_price': '123', 'curr_price': 170.95, 'diff': 38.98}
+TICKER_INFO_BRIEF_NEW = {'ticker': 'YNDX', 'last_price': '170.95', 'curr_price': 570.95, 'diff': 0.00}
 
-TICKER_INFO_BRIEF_OLD = {'ticker': 'AAPL', 'last_price': '123', 'curr_price': 123.00, 'diff': 38.98}
+TICKER_INFO_BRIEF_OLD = {'ticker': 'YNDX', 'last_price': '196.67', 'curr_price': 196.67, 'diff': 0.00}
 
 NEWS_NEW = {'time': '1 января в 00:00', 'header': 'Test news'}
-NEWS_OLD = {'time': '8 июля в 08:45', 'header': 'Сбербанк. Отбились'}
+NEWS_OLD = {'time': '15 апреля в 11:38', 'header': 'Test old news'}
 
 PORTFOLIO = {'payload': {'positions': [{'averagePositionPrice': {'currency': 'RUB',
                                                      'value': 166.7},

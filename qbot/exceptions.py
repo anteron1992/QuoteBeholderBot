@@ -1,5 +1,5 @@
 class QBException(Exception):
-    """ Basic Quotebeholder exception """
+    """ Basic QuoteBeholder exception """
 
 
 class TokenNotFound(QBException):
@@ -8,3 +8,15 @@ class TokenNotFound(QBException):
 
 class AccountNotFound(QBException):
     """ Account ID is not found """
+
+
+class DatabaseSchemeError(QBException):
+    """ Database scheme not found """
+
+
+class DatabaseConnectionError(QBException):
+    """ Connecting database error """
+
+
+class DatabaseTableError(QBException):
+    """ Table is not found """

@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher, types
 from qbot.logger import logger
 from qbot.app.application import application
 
+
 bot = Bot(token=getenv("TELE_TOKEN"))
 dp = Dispatcher(bot)
 app = application()
@@ -25,17 +26,17 @@ async def subscribe(message: types.Message):
         sub_tickers = list()
         for ticker in message.get_args().split():
             if not await app.db.check_ticker(ticker, message.from_user.id):
-                try:
-                    await app.market['tinkoff'].subscribe_ticker(
-                        ticker,
-                        message.from_user.username,
-                        message.from_user.id
-                    )
+                response = await app.market['tinkoff'].subscribe_ticker(
+                    ticker,
+                    message.from_user.username,
+                    message.from_user.id
+                )
+                if response:
                     sub_tickers.append(ticker)
-                except ValueError:
-                    await message.reply(f"Тикер {ticker} не найден.")
+                else:
+                    await message.reply(f"Тикер {ticker.upper()} не найден.")
             else:
-                await message.reply(f"Вы уже подписаны на тикер {ticker} .")
+                await message.reply(f"Вы уже подписаны на тикер {ticker.upper()} .")
         if sub_tickers:
             await message.reply(f"Вы успешно подписались на {', '.join(sub_tickers)}")
     else:

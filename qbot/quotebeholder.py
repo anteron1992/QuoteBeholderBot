@@ -6,10 +6,11 @@ from qbot.telebot.telebot import dp, bot
 from qbot.interval_actions import Interval_actions
 
 app = application()
-actions = Interval_actions(app)
 
 
 async def main():
+    await app.db.init()
+    actions = Interval_actions(app)
     scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
     scheduler.add_job(actions.ticker_polling, "interval", minutes=app.config['ticker_interval'], args=(bot,))
     scheduler.add_job(actions.news_polling, "interval", minutes=app.config['news_interval'], args=(bot,))
@@ -19,6 +20,7 @@ async def main():
     finally:
         bot.get_session().close()
         scheduler.shutdown()
+        await app.db.close_pool()
         await asyncio.sleep(1)
 
 
