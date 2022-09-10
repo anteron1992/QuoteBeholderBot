@@ -9,7 +9,8 @@ class Interval_actions:
         self.tinkoff = app.market['tinkoff']
         self.db = app.db
 
-    async def ticker_polling(self, bot) -> bool:
+    async def ticker_polling(self, bot):
+        logger.info("Start ticker polling...")
         ticker_list = await self.tinkoff.get_username_tickers()
         for uid, result in ticker_list.items():
             for ticker in result:
@@ -30,6 +31,7 @@ class Interval_actions:
                     logger.error(f"Тикер {ticker} c id {uid} не найден")
 
     async def news_polling(self, bot):
+        logger.info("Start news polling...")
         special_tickers_dict = self.config['exceptions']
         ticker_list = await self.tinkoff.get_username_tickers()
         for uid, result in ticker_list.items():
