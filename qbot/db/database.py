@@ -52,7 +52,7 @@ class Database:
                 port="5432",
                 database="template1",
                 user="postgres",
-                password=CONFIG['db_defpass']
+                password=CONFIG.get('db_defpass')
         ) as conn:
             try:
                 await conn.execute(f"CREATE DATABASE {self.config['database']};")
