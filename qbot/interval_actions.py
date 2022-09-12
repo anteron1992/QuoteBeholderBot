@@ -22,7 +22,7 @@ class Interval_actions:
                             message = f"<a href='https://bcs-express.ru/kotirovki-i-grafiki/{tik}'>{tik}</a> {ticker_info['diff']}%"
                             if ticker_info["diff"] > 0:
                                 message = f"<a href='https://bcs-express.ru/kotirovki-i-grafiki/{tik}'>{tik}</a> +{ticker_info['diff']}%"
-                            await bot.send_message(uid, message, parse_mode="HTML")
+                            await bot.send_message(uid, message, parse_mode="HTML", disable_web_page_preview=True)
                             logger.info(
                                 f"Ticker {ticker_info['ticker']} price is changed by {ticker_info['diff']}% message sent to {id}"
                             )
@@ -46,7 +46,7 @@ class Interval_actions:
                             f"<b>{rez['header']}</b>\n"
                             f"{rez['text']}\n"
                         )
-                        await bot.send_message(uid, message, parse_mode="HTML")
+                        await bot.send_message(uid, message, parse_mode="HTML", disable_web_page_preview=True)
                         logger.info(
                             f"Ticker {ticker} fresh news from {rez['time']} message sent to {uid}"
                         )
