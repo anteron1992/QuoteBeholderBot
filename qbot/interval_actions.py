@@ -44,7 +44,6 @@ class Interval_actions:
                             f"<a href='{rez['href']}'>{ticker}</a>\n"
                             f"<em>{rez['time']}</em>\n"
                             f"<b>{rez['header']}</b>\n"
-                            f"{rez['text']}\n"
                         )
                         await bot.send_message(uid, message, parse_mode="HTML", disable_web_page_preview=True)
                         logger.info(

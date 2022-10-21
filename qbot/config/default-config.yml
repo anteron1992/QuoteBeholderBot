@@ -1,5 +1,5 @@
-ticker_interval: 30
-news_interval: 30
+ticker_interval: 5
+news_interval: 5
 reaction_percent: 2.0
 
 db_scheme: tickers_scheme.sql
